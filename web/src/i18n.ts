@@ -1,0 +1,363 @@
+import { createContext, useContext } from 'react'
+import type { Lang, Text, Trade } from './types'
+
+const en = {
+  appName: 'Site Control',
+  demoBanner: 'Sample data only. Nothing is sent to a server.',
+  switchLang: 'हिंदी',
+
+  // role picker (demo only, replaced by login in Phase 2)
+  chooseView: 'Choose a view',
+  chooseViewNote: 'Demo only. From Phase 2 each person signs in and sees only their own side.',
+  workerView: 'Worker phone',
+  ownerView: 'Owner dashboard',
+  backToViews: 'Change view',
+
+  // worker
+  hello: 'Hello, {name}',
+  todaySite: "Today's site",
+  todayWork: "Today's work",
+  noSiteToday: 'No site given for today. Please call the owner.',
+  markAttendance: 'Mark attendance',
+  attendanceDone: 'Attendance marked',
+  waitingApproval: 'Waiting for owner approval',
+  approvedByOwner: 'Approved by owner',
+  rejectedByOwner: 'Not approved — please call the owner',
+  savedOnPhone: 'Saved on phone — will send when network returns',
+  sending: 'Sending…',
+  checkOut: 'Leaving site (check out)',
+  leftAt: 'Left site at {time}',
+  sendWorkUpdate: 'Send work update',
+  tapAndSpeak: 'Tap the mic and speak',
+  recordingNow: 'Recording… speak now',
+  stop: 'Stop',
+  workDoneQ: 'Is the work finished?',
+  yesFinished: 'Yes, finished',
+  stillGoing: 'No, still going',
+  paidQ: 'Did the customer pay?',
+  yesPaid: 'Yes, paid',
+  notPaid: 'Not paid',
+  optional: 'optional',
+  send: 'Send',
+  recordAgain: 'Record again',
+  updateSent: 'Update sent',
+  updatesToday: 'Updates sent today: {n}',
+  micDenied: 'Microphone is blocked. Allow it in phone settings.',
+  micUnavailable: 'Microphone does not work here. (It needs a secure https link.)',
+  noNetwork: 'No network — your work is saved on the phone',
+
+  // owner navigation
+  navHome: 'Home',
+  navAttendance: 'Attendance',
+  navSites: 'Sites',
+  navReports: 'Reports',
+  navPayments: 'Payments',
+
+  // owner home
+  present: 'Present',
+  activeSites: 'Active sites',
+  reportsPending: 'Reports to review',
+  outstanding: 'Customer outstanding',
+  nAwaiting: '{n} awaiting approval',
+  nJobs: 'across {n} jobs',
+  needsAttention: 'Needs your attention',
+  allClear: 'All clear for now.',
+  attnApprove: '{n} attendance to approve',
+  attnReports: '{n} new voice reports',
+  attnCompleted: '{n} job(s) reported finished — approve?',
+  attnFollowUp: '{n} payment follow-ups due',
+  attnPendingSync: '{n} phone(s) not synced yet',
+  recentActivity: 'Recent activity',
+  actCheckIn: '{name} checked in — {site}',
+  actReport: 'Voice report from {name} — {site}',
+
+  // attendance
+  absent: 'Absent',
+  status_pending_sync: 'Offline / pending sync',
+  status_submitted: 'Submitted',
+  status_received: 'Received · to approve',
+  status_approved: 'Approved',
+  status_rejected: 'Rejected',
+  checkInAt: 'In {time}',
+  checkOutAt: 'Out {time}',
+  correctedNote: 'Corrected (was {time})',
+  approve: 'Approve',
+  reject: 'Reject',
+  correct: 'Correct time',
+  newTime: 'Correct check-in time',
+  reasonRequired: 'Reason (required)',
+  save: 'Save',
+  cancel: 'Cancel',
+  history: 'History',
+  approveAllReceived: 'Approve all received ({n})',
+  filterAll: 'All',
+  filterWaiting: 'Waiting',
+  filterAbsent: 'Absent',
+
+  // sites
+  assignedWorkers: 'Workers',
+  todayJob: "Today's job",
+  lastUpdate: 'Last update',
+  noUpdateYet: 'No update yet',
+  pendingIssues: 'Pending',
+  noIssues: 'Nothing pending',
+  issueReports: '{n} report(s) to review',
+  issueBalance: '{amount} outstanding',
+  issueAttendance: '{n} attendance to approve',
+
+  // work status
+  work_in_progress: 'In progress',
+  work_worker_completed: 'Worker says finished',
+  work_owner_approved: 'Finished — approved',
+
+  // reports
+  recordedAt: 'Recorded {time}',
+  receivedAt: 'Received {time}',
+  workerSaysWork: 'Work',
+  workerSaysPayment: 'Payment',
+  claim_completed: 'worker says finished',
+  claim_in_progress: 'worker says still going',
+  claim_paid: 'worker says customer paid',
+  claim_unpaid: 'worker says customer has not paid',
+  notAnswered: 'not answered',
+  transcript: 'Text of recording',
+  transcriptLater: 'Not available yet — automatic Hindi text comes in a later phase. Please listen.',
+  demoNoAudio: 'Demo sample — no recording attached',
+  markReviewed: 'Mark reviewed',
+  reviewed: 'Reviewed',
+  approveCompletion: 'Approve job as finished',
+  noReports: 'No reports yet.',
+  showReviewed: 'Show reviewed',
+
+  // payments
+  totalOutstanding: 'Total outstanding',
+  agreed: 'Agreed',
+  receivedVerified: 'Received (verified)',
+  balance: 'Outstanding',
+  lastPayment: 'Last payment',
+  nextFollowUp: 'Next follow-up',
+  none: '—',
+  pay_none: 'No payment verified',
+  pay_partial: 'Part paid',
+  pay_full: 'Fully paid',
+  workerReported: 'Worker report: {claim}',
+  workerReportNote: 'Not counted as money until you verify it.',
+  overdue: 'overdue',
+  dueToday: 'due today',
+  recordPayment: 'Record verified payment',
+  amount: 'Amount (₹)',
+  evidence: 'How did you check it? (UPI ref, cash, cheque…)',
+  amountTooBig: 'Amount is more than the balance.',
+  paymentHistory: 'Payment history',
+  stageWorkDone: 'Work finished',
+  stageWorkApproved: 'Work approved',
+  stagePayReported: 'Payment reported',
+  stagePayVerified: 'Payment verified',
+  stageBalance: 'Balance',
+  work: 'Work',
+}
+
+export type TKey = keyof typeof en
+
+const hi: Record<TKey, string> = {
+  appName: 'साइट कंट्रोल',
+  demoBanner: 'सिर्फ़ नमूना डेटा। कुछ भी सर्वर पर नहीं जाता।',
+  switchLang: 'English',
+
+  chooseView: 'स्क्रीन चुनें',
+  chooseViewNote: 'सिर्फ़ डेमो। फ़ेज़ 2 से हर व्यक्ति लॉगिन करेगा और सिर्फ़ अपनी स्क्रीन देखेगा।',
+  workerView: 'कारीगर का फ़ोन',
+  ownerView: 'मालिक का डैशबोर्ड',
+  backToViews: 'स्क्रीन बदलें',
+
+  hello: 'नमस्ते, {name}',
+  todaySite: 'आज की साइट',
+  todayWork: 'आज का काम',
+  noSiteToday: 'आज कोई साइट नहीं दी गई। मालिक को फ़ोन करें।',
+  markAttendance: 'हाजिरी लगाओ',
+  attendanceDone: 'हाजिरी लग गई',
+  waitingApproval: 'मालिक की मंज़ूरी बाकी है',
+  approvedByOwner: 'मालिक ने मंज़ूर किया',
+  rejectedByOwner: 'मंज़ूर नहीं हुई — मालिक को फ़ोन करें',
+  savedOnPhone: 'फ़ोन में सेव है — नेटवर्क आते ही भेज देंगे',
+  sending: 'भेज रहे हैं…',
+  checkOut: 'साइट से निकल रहे हैं (छुट्टी)',
+  leftAt: '{time} पर साइट से निकले',
+  sendWorkUpdate: 'काम की जानकारी भेजो',
+  tapAndSpeak: 'माइक दबाओ और बोलो',
+  recordingNow: 'रिकॉर्ड हो रहा है… बोलिए',
+  stop: 'रोको',
+  workDoneQ: 'काम पूरा हुआ?',
+  yesFinished: 'हाँ, पूरा हुआ',
+  stillGoing: 'नहीं, चालू है',
+  paidQ: 'ग्राहक ने पैसे दिए?',
+  yesPaid: 'हाँ, दिए',
+  notPaid: 'नहीं दिए',
+  optional: 'ज़रूरी नहीं',
+  send: 'भेजो',
+  recordAgain: 'फिर से बोलो',
+  updateSent: 'जानकारी भेज दी',
+  updatesToday: 'आज भेजी गई जानकारी: {n}',
+  micDenied: 'माइक बंद है। फ़ोन की सेटिंग में माइक की इजाज़त दें।',
+  micUnavailable: 'यहाँ माइक नहीं चल रहा। (सुरक्षित https लिंक चाहिए।)',
+  noNetwork: 'नेटवर्क नहीं है — आपका काम फ़ोन में सेव है',
+
+  navHome: 'होम',
+  navAttendance: 'हाजिरी',
+  navSites: 'साइट',
+  navReports: 'रिपोर्ट',
+  navPayments: 'पेमेंट',
+
+  present: 'हाज़िर',
+  activeSites: 'चालू साइट',
+  reportsPending: 'देखनी बाकी रिपोर्ट',
+  outstanding: 'ग्राहकों से बाकी',
+  nAwaiting: '{n} की मंज़ूरी बाकी',
+  nJobs: '{n} कामों पर',
+  needsAttention: 'आपका ध्यान चाहिए',
+  allClear: 'अभी सब ठीक है।',
+  attnApprove: '{n} हाजिरी मंज़ूर करनी है',
+  attnReports: '{n} नई आवाज़ रिपोर्ट',
+  attnCompleted: '{n} काम पूरे बताए गए — मंज़ूर करें?',
+  attnFollowUp: '{n} पेमेंट फ़ॉलो-अप बाकी',
+  attnPendingSync: '{n} फ़ोन से डेटा अभी नहीं आया',
+  recentActivity: 'हाल की गतिविधि',
+  actCheckIn: '{name} ने हाजिरी लगाई — {site}',
+  actReport: '{name} की आवाज़ रिपोर्ट — {site}',
+
+  absent: 'गैरहाज़िर',
+  status_pending_sync: 'ऑफ़लाइन / भेजना बाकी',
+  status_submitted: 'भेजी गई',
+  status_received: 'मिली · मंज़ूरी बाकी',
+  status_approved: 'मंज़ूर',
+  status_rejected: 'नामंज़ूर',
+  checkInAt: 'आए {time}',
+  checkOutAt: 'गए {time}',
+  correctedNote: 'सुधारा गया (पहले {time})',
+  approve: 'मंज़ूर करें',
+  reject: 'नामंज़ूर',
+  correct: 'समय सुधारें',
+  newTime: 'सही आने का समय',
+  reasonRequired: 'कारण (ज़रूरी)',
+  save: 'सेव करें',
+  cancel: 'रद्द करें',
+  history: 'इतिहास',
+  approveAllReceived: 'सभी मिली हाजिरी मंज़ूर करें ({n})',
+  filterAll: 'सभी',
+  filterWaiting: 'बाकी',
+  filterAbsent: 'गैरहाज़िर',
+
+  assignedWorkers: 'कारीगर',
+  todayJob: 'आज का काम',
+  lastUpdate: 'आख़िरी जानकारी',
+  noUpdateYet: 'अभी कोई जानकारी नहीं',
+  pendingIssues: 'बाकी',
+  noIssues: 'कुछ बाकी नहीं',
+  issueReports: '{n} रिपोर्ट देखनी है',
+  issueBalance: '{amount} बाकी',
+  issueAttendance: '{n} हाजिरी मंज़ूर करनी है',
+
+  work_in_progress: 'काम चालू',
+  work_worker_completed: 'कारीगर: काम पूरा',
+  work_owner_approved: 'पूरा — मंज़ूर',
+
+  recordedAt: 'रिकॉर्ड {time}',
+  receivedAt: 'मिली {time}',
+  workerSaysWork: 'काम',
+  workerSaysPayment: 'पेमेंट',
+  claim_completed: 'कारीगर के अनुसार पूरा',
+  claim_in_progress: 'कारीगर के अनुसार चालू',
+  claim_paid: 'कारीगर के अनुसार ग्राहक ने पैसे दिए',
+  claim_unpaid: 'कारीगर के अनुसार ग्राहक ने पैसे नहीं दिए',
+  notAnswered: 'जवाब नहीं दिया',
+  transcript: 'रिकॉर्डिंग का लिखा रूप',
+  transcriptLater: 'अभी उपलब्ध नहीं — हिंदी में अपने-आप लिखना बाद के फ़ेज़ में आएगा। कृपया सुनें।',
+  demoNoAudio: 'डेमो नमूना — कोई रिकॉर्डिंग नहीं',
+  markReviewed: 'देख लिया',
+  reviewed: 'देखी गई',
+  approveCompletion: 'काम पूरा मंज़ूर करें',
+  noReports: 'अभी कोई रिपोर्ट नहीं।',
+  showReviewed: 'देखी गई रिपोर्ट भी दिखाएँ',
+
+  totalOutstanding: 'कुल बाकी',
+  agreed: 'तय रकम',
+  receivedVerified: 'मिला (जाँचा हुआ)',
+  balance: 'बाकी',
+  lastPayment: 'आख़िरी पेमेंट',
+  nextFollowUp: 'अगला फ़ॉलो-अप',
+  none: '—',
+  pay_none: 'कोई पेमेंट जाँचा नहीं',
+  pay_partial: 'कुछ पेमेंट मिला',
+  pay_full: 'पूरा पेमेंट मिला',
+  workerReported: 'कारीगर की जानकारी: {claim}',
+  workerReportNote: 'जब तक आप जाँच न लें, इसे पैसा मिला नहीं माना जाएगा।',
+  overdue: 'देर हो गई',
+  dueToday: 'आज',
+  recordPayment: 'जाँचा हुआ पेमेंट दर्ज करें',
+  amount: 'रकम (₹)',
+  evidence: 'कैसे जाँचा? (UPI नंबर, नकद, चेक…)',
+  amountTooBig: 'रकम बाकी से ज़्यादा है।',
+  paymentHistory: 'पेमेंट इतिहास',
+  stageWorkDone: 'काम पूरा',
+  stageWorkApproved: 'काम मंज़ूर',
+  stagePayReported: 'पेमेंट बताया',
+  stagePayVerified: 'पेमेंट जाँचा',
+  stageBalance: 'बाकी',
+  work: 'काम',
+}
+
+const dictionaries: Record<Lang, Record<TKey, string>> = { en, hi }
+
+export type T = (key: TKey, vars?: Record<string, string | number>) => string
+
+export function makeT(lang: Lang): T {
+  return (key, vars) => {
+    let s = dictionaries[lang][key]
+    if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v))
+    return s
+  }
+}
+
+export const tradeNames: Record<Trade, Text> = {
+  mason: { en: 'Mason', hi: 'मिस्त्री' },
+  painter: { en: 'Painter', hi: 'पेंटर' },
+  tiler: { en: 'Tiler', hi: 'टाइल मिस्त्री' },
+  carpenter: { en: 'Carpenter', hi: 'बढ़ई' },
+  plumber: { en: 'Plumber', hi: 'प्लंबर' },
+  electrician: { en: 'Electrician', hi: 'इलेक्ट्रीशियन' },
+  waterproofing: { en: 'Waterproofing', hi: 'वॉटरप्रूफ़िंग' },
+  helper: { en: 'Helper', hi: 'हेल्पर' },
+}
+
+export interface LangValue {
+  lang: Lang
+  setLang: (l: Lang) => void
+  t: T
+  /** Pick the right language from owner-entered text. */
+  tx: (text: Text) => string
+}
+
+export const LangContext = createContext<LangValue | null>(null)
+
+export function useLang(): LangValue {
+  const v = useContext(LangContext)
+  if (!v) throw new Error('useLang outside LangContext')
+  return v
+}
+
+export function loadLang(storageKey: string, fallback: Lang): Lang {
+  try {
+    const v = localStorage.getItem(storageKey)
+    return v === 'hi' || v === 'en' ? v : fallback
+  } catch {
+    return fallback
+  }
+}
+
+export function saveLang(storageKey: string, lang: Lang) {
+  try {
+    localStorage.setItem(storageKey, lang)
+  } catch {
+    // private mode: language just won't be remembered
+  }
+}

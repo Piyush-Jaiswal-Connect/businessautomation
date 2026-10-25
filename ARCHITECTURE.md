@@ -110,7 +110,15 @@ site-control/
   ARCHITECTURE.md      this file
   PROJECT_STATUS.md    exact progress, for resuming
   START_HERE.md        plain-language guide for the owner
+  START_DEMO.cmd       double-click to run the app on this PC
   web/                 React + TypeScript PWA (worker app + owner dashboard)
+    src/types.ts         record shapes (match §4)
+    src/i18n.ts          all Hindi/English text
+    src/lib/             India-time formatting, dashboard sums, recorder/online hooks
+    src/demo/            DEMO store + sample data (Phase 1 only; Phase 2 swaps in Firestore
+                         behind the same useStore() data and actions)
+    src/worker/          worker screen
+    src/owner/           owner dashboard pages
   firebase/            security rules, Cloud Functions, emulator config  (Phase 2)
   android-widget/      Kotlin + Glance owner widget                      (Phase 5)
 ```

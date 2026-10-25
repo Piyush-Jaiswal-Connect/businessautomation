@@ -10,8 +10,20 @@ Both sides can switch between **हिंदी** and **English**.
 It will open from a phone's home-screen icon called **"Site Control"**, like a normal app.
 
 ## Where things stand
-- **Phase 0 (setup): done.** Only the plan and an empty app skeleton exist. Nothing is usable yet.
+- **Phase 1 (screens with DEMO data): done.** You can click through both sides on this computer.
+  Nothing is saved or sent anywhere yet, and the names and amounts are made up.
 - See `PROJECT_STATUS.md` for exact progress.
+
+## Try the demo on this computer
+1. Open the `site-control` folder and double-click **START_DEMO.cmd**.
+2. A black window opens and then the browser shows Site Control. (First time takes a minute.)
+3. Choose **Worker phone** or **Owner dashboard**. "Change view" at the bottom switches back.
+4. Tip: press F12 → the phone icon, to see it at phone size.
+5. To stop, close the black window.
+
+Reloading the page resets the demo data. The microphone should work in Chrome on this computer
+(not yet tried with a real mic — please test and tell me); on phones it needs the app to be online
+with https (Phase 4).
 
 ## The plan, in short
 | Phase | What you get |
