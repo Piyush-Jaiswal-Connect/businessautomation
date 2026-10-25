@@ -1,4 +1,4 @@
-"""Generates the Site Control app icons into web/public/icons/.
+"""Generates the Ayush Enterprises app icons into web/public/icons/.
 
 Run: python scripts/make-icons.py   (needs Pillow)
 """

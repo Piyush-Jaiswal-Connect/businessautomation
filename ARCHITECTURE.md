@@ -1,4 +1,4 @@
-# Site Control — Architecture Decisions
+# Ayush Enterprises app (project "Site Control") — Architecture Decisions
 
 Last updated: 2026-10-25 (Phase 0)
 
@@ -10,6 +10,37 @@ Last updated: 2026-10-25 (Phase 0)
   Each user can switch with one toggle (हिंदी / English). The choice is saved on the device.
 - All text lives in one translation file per language (`hi.ts`, `en.ts`) so no screen hard-codes text.
 - Devanagari uses the phone's built-in font (Noto Sans Devanagari ships with Android), so no font download.
+
+## 1b. Owner decisions of 2026-10-25 (supersede earlier plan where they differ)
+
+- **Name:** everything the user sees says **Ayush Enterprises** (Hindi: आयुष एंटरप्राइज़ेज़); label under the
+  phone icon is **"Ayush"**. Internal IDs (Firebase project, folders) keep "site-control"; nobody sees them.
+- **Voice reports are the core feature, with AI** (moved from optional Phase 6 into Phase 3).
+  Owner approved Google's **paid Gemini AI** (estimate ₹50–250/month; exact prices to be checked before switching on;
+  bill alert raised to **₹500/month**).
+- **Attendance = "started work" only.** Workers move between sites during the day; the sites they visit come from
+  their voice reports. If the owner did assign a site, the worker still sees it.
+- **Location is saved with each voice report** (only at that moment, never tracked all day; workers are told).
+
+## 1c. Voice report → dashboard (Phase 3 design)
+
+Worker: tap mic → speak (Hindi/English/mix) → tap stop → **sends automatically** (a few seconds to cancel).
+Screen hint: "बताइए: कौन सी साइट, क्या काम किया, पैसे मिले या नहीं". No typing, no questions to answer.
+Offline: recording kept on the phone and sent when network returns.
+
+Server (Cloud Function, triggered when the audio upload finishes):
+1. Gemini receives the audio + the owner's site list + the worker's name.
+2. Returns: exact transcript (original language), English translation, and fields:
+   **site** (matched to a known site, or "new place" text), **work done**, **work status**
+   (completed / in progress / problem), **payment** (customer paid / not paid / partial / not mentioned, and amount
+   if spoken), **follow-up**, plus a confidence flag per field. Rule: only what the worker said; unknown = blank.
+3. The location saved with the report helps confirm the site.
+4. Owner gets a notification (Phase 4 push).
+
+Owner dashboard card: worker · time · ▶ play · site · work · status · payment (worker says) · follow-up ·
+transcript + translation · ⚠ "please check" on uncertain fields · edit any field · **Verify payment**
+(worker's word never counts as money until the owner verifies). Lists: today's reports, unpaid/follow-up,
+per-site history. The original recording is always kept.
 
 ## 2. Stack (chosen for low cost and low maintenance)
 
@@ -25,7 +56,7 @@ Last updated: 2026-10-25 (Phase 0)
 | Hosting | **Firebase Hosting** | Free HTTPS; same project as everything else. |
 | Local testing | **Firebase Emulator Suite** (via `npx firebase-tools`) | Test rules and functions without touching real data. |
 | Owner widget (Phase 5) | **Kotlin + Jetpack Glance** Android app | A real home-screen widget; same Firebase backend. |
-| Transcription (Phase 6, optional) | Decide later (e.g. Google Speech-to-Text or a Gemini model) | Not needed for first release; costs explained before enabling. |
+| Voice → text + fields (Phase 3) | **Google Gemini** (paid tier, called from a Cloud Function) | Understands Hindi/Hinglish audio; transcript, translation and fields in one step; same Google billing; paid tier does not train on our data. Owner approved 2026-10-25. |
 
 Not used on purpose: separate servers, paid databases, SMS OTP (costs per message), payment gateways, billing/quotation modules.
 
@@ -145,11 +176,12 @@ site-control/
 | Cloud Functions | 2 million calls/month | a few thousand/month | ₹0 |
 | Cloud Storage (voice) | 5 GB stored, 1 GB/day download *in US regions only* | ~0.5 MB per minute of voice; ~0.5 GB/month | ₹0–20/month |
 | FCM push | free | — | ₹0 |
+| Gemini AI (voice reports) | paid per use | ~15 workers × 2–3 short messages/day | **₹50–250/month (estimate, to be checked)** |
 | Hosting | 10 GB stored, 360 MB/day | small app | ₹0 |
 
 **Important:** Cloud Storage and Cloud Functions now require the **Blaze (pay-as-you-go)** plan. Blaze still
 includes the free allowances above, but needs a debit/credit card with international payments enabled.
-We will set a **budget alert at ₹100/month** so any unexpected cost is emailed immediately.
+We will set a **budget alert at ₹500/month** (raised from ₹100 because of the AI) so any unexpected cost is emailed immediately.
 Storage bucket region: `asia-south1` (Mumbai) for speed and keeping data in India; at our size the
 cost is a few rupees per month. (Alternative: `us-central1` to stay fully free — decided at Phase 3.)
 

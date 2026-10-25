@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Site Control security rules.
+// Ayush Enterprises (Site Control) security rules.
 // Everything is denied unless a rule below allows it.
 // Roles:
 //   owner  — Google account whose verified email is in ownerEmails(), or has an admins/{uid} document.

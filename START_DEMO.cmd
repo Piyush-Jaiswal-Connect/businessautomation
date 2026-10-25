@@ -1,5 +1,5 @@
 @echo off
-rem Double-click to run Site Control on this computer with the TEST database.
+rem Double-click to run the Ayush Enterprises app on this computer with the TEST database.
 rem Two black windows open (test database + app). Close both to stop.
 rem Test data is wiped when you close the test database window.
 cd /d "%~dp0"
@@ -13,9 +13,9 @@ if not exist web\node_modules (
   echo First run: installing app, please wait...
   call npm --prefix web install
 )
-start "Site Control - test database" cmd /k npm run emulators
+start "Ayush - test database" cmd /k npm run emulators
 timeout /t 15 /nobreak >nul
-start "Site Control - app" cmd /k npm --prefix web run dev -- --port 5173
+start "Ayush - app" cmd /k npm --prefix web run dev -- --port 5173
 timeout /t 5 /nobreak >nul
 rem Owner: use 127.0.0.1 (the test Google sign-in needs it).
 start "" http://127.0.0.1:5173

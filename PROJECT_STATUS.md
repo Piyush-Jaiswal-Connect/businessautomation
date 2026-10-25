@@ -1,4 +1,4 @@
-# PROJECT_STATUS — Site Control
+# PROJECT_STATUS — Ayush Enterprises app (project folder: site-control)
 
 ## CURRENT PHASE:
 **Phase 2 — Real database and login: COMPLETE on the local test database (checkpoint P2).**
@@ -78,18 +78,35 @@ Phase 2 (P2):
 
 ## COST/BILLING CONSIDERATIONS:
 - Phase 2 adds no cost (no server code, no SMS). Firestore free daily limits are far above expected use.
-- Blaze (card) needed from Phase 3; budget alert ₹100/month. Expected ₹0–20/month.
+- Blaze (card) needed from Phase 3; budget alert **₹500/month**. Expected ₹0–20/month for Firebase **plus ₹50–250/month for Gemini AI**
+  (owner approved paid AI on 2026-10-25; exact prices to be checked and shown before it is switched on).
 
-## MANUAL ACTION REQUIRED (owner, in https://console.firebase.google.com → project "site-control"):
-1. **Build → Authentication → Get started** → Sign-in method → enable **Google** (choose your support email) and enable **Anonymous**.
-2. **Build → Firestore Database → Create database** → location **asia-south1 (Mumbai)** → **Start in production mode**.
-3. **Project settings (gear) → General → Your apps → Web (</>)** → nickname "Site Control" → Register (no Hosting tick needed)
-   → copy the `firebaseConfig` block and paste it to me in chat (it is not secret).
-4. Tell me the **Project ID** shown in Project settings (it may look like `site-control-1a2b3`).
-5. Tell me if any other Gmail should be an owner/admin (e.g. a family member).
-Then I will connect the app and upload the security rules (needs a one-time `firebase login` approval in your browser).
+## DECISIONS 2026-10-25 (after P2, before Phase 3):
+- App renamed **Ayush Enterprises** (icon label "Ayush"). Done in app + docs (internal IDs unchanged).
+- Phase 3 now = **voice reports with AI**: tap mic → speak → stop sends automatically → Gemini makes transcript,
+  English translation and fields (site, work, status, payment + amount, follow-up, confidence) → owner dashboard cards,
+  unpaid/follow-up list, per-site history; owner can correct any field and verifies money. See ARCHITECTURE.md §1b–1c.
+- Attendance becomes "started work" only (no site needed at check-in).
+- Location saved with each voice report (at that moment only; workers told in the privacy notice).
+- Paid Gemini approved; bill alert ₹500/month.
+
+## MANUAL ACTION REQUIRED:
+- Owner says the console steps (Google + Anonymous sign-in, Firestore in asia-south1, web app registered) are **done** (2026-10-25).
+- **Still needed:** paste the `firebaseConfig` block and the **Project ID** in chat (the last message arrived empty),
+  and name any other Gmail that should be an owner/admin.
+- Before AI goes live (Phase 3): switch the project to **Blaze** (card) and set a **₹500/month budget alert**
+  (Google Cloud console → Billing → Budgets & alerts). I will guide step by step.
+- After the config arrives: approve a one-time `firebase login` in the browser so the security rules can be uploaded.
 
 ## NEXT EXACT ACTION:
-When the owner sends the config: put it in `web/src/firebase-config.ts`, add the project to `.firebaserc`, run
-`npx firebase login`, deploy `firebase/firestore.rules`, and smoke-test against the real project. Then Phase 3:
-voice recording upload to Cloud Storage (Blaze), playback in owner inbox, jobs/payments with owner-verified money and audit.
+Waiting for owner's "Start Phase 3" + config. Then, in order:
+1. Connect real project: config into `web/src/firebase-config.ts`, project into `.firebaserc`, `npx firebase login`,
+   deploy `firebase/firestore.rules`, smoke-test sign-in/pairing/attendance on the real project.
+2. Attendance → "started work" (site optional), update rules + tests.
+3. Voice report: one-tap record → stop auto-sends (cancel window), offline queue (IndexedDB), location at send,
+   upload to Cloud Storage (owner + that worker only), `reports` docs + rules + tests.
+4. Cloud Function (asia-south1) on upload → Gemini: transcript, translation, fields, confidence (emulator-tested
+   with a stub first; real Gemini only after showing exact prices and Blaze is on).
+5. Owner dashboard: report cards with player, ⚠ uncertain fields, edit, unpaid/follow-up list, per-site history;
+   jobs/payments with owner-verified money and audit log.
+6. Test with two sessions; update docs; checkpoint P3; stop.

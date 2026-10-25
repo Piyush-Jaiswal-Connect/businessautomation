@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Lang, Text, Trade } from './types'
 
 const en = {
-  appName: 'Site Control',
+  appName: 'Ayush Enterprises',
   demoBanner: 'Sample data only. Nothing is sent to a server.',
   switchLang: 'हिंदी',
 
@@ -212,7 +212,7 @@ const en = {
   phoneNotPaired: 'No phone connected',
   pairPhone: 'Connect phone',
   newPhone: 'Connect a new phone',
-  pairInstructions: 'On the worker\'s phone: open the camera and scan this code, or open Site Control and type the number. Works once, for 15 minutes.',
+  pairInstructions: 'On the worker\'s phone: open the camera and scan this code, or open the Ayush app and type the number. Works once, for 15 minutes.',
   codeExpires: 'Valid until {time}',
   close: 'Close',
   deactivate: 'Deactivate (lost phone / left work)',
@@ -232,7 +232,7 @@ const en = {
 export type TKey = keyof typeof en
 
 const hi: Record<TKey, string> = {
-  appName: 'साइट कंट्रोल',
+  appName: 'आयुष एंटरप्राइज़ेज़',
   demoBanner: 'सिर्फ़ नमूना डेटा। कुछ भी सर्वर पर नहीं जाता।',
   switchLang: 'English',
 
@@ -433,7 +433,7 @@ const hi: Record<TKey, string> = {
   phoneNotPaired: 'कोई फ़ोन नहीं जुड़ा',
   pairPhone: 'फ़ोन जोड़ें',
   newPhone: 'नया फ़ोन जोड़ें',
-  pairInstructions: 'कारीगर के फ़ोन पर: कैमरा खोलकर यह कोड स्कैन करें, या Site Control खोलकर नंबर लिखें। एक बार, 15 मिनट तक चलेगा।',
+  pairInstructions: 'कारीगर के फ़ोन पर: कैमरा खोलकर यह कोड स्कैन करें, या Ayush ऐप खोलकर नंबर लिखें। एक बार, 15 मिनट तक चलेगा।',
   codeExpires: '{time} तक मान्य',
   close: 'बंद करें',
   deactivate: 'बंद करें (फ़ोन खोया / काम छोड़ा)',

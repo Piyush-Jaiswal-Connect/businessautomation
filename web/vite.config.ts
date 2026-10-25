@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/apple-touch-180.png'],
       manifest: {
-        name: 'Site Control',
-        short_name: 'Site Control',
+        name: 'Ayush Enterprises',
+        short_name: 'Ayush',
         description: 'Attendance, work updates and payments for site teams',
         lang: 'hi',
         start_url: '/',

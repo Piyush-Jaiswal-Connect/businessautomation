@@ -1,13 +1,13 @@
-# START HERE — Site Control (for the owner)
+# START HERE — Ayush Enterprises app (for the owner)
 
 ## What this is
-Site Control is one app with two sides:
-- **Worker side (Hindi first):** shows today's site, one big green button to mark attendance, one big mic button to send a voice update.
-- **Owner side (English first):** who is present, which sites are active, new voice reports, and customer money still pending.
+The Ayush Enterprises app has two sides:
+- **Worker side (Hindi first):** one big green button to mark attendance, one big mic button to send a voice update. Workers never type.
+- **Owner side (English first):** who is present, and every voice update turned into a card: which site, what work, finished or not, did the customer pay.
 
 Both sides can switch between **हिंदी** and **English**.
 
-It will open from a phone's home-screen icon called **"Site Control"**, like a normal app.
+It will open from a phone's home-screen icon called **"Ayush"**, like a normal app.
 
 ## Where things stand
 - **Phase 2 (real login + real attendance): done and tested on a test database on this computer.**
@@ -16,7 +16,7 @@ It will open from a phone's home-screen icon called **"Site Control"**, like a n
 
 ## Try it on this computer (test database — not real records)
 1. Open the `site-control` folder and double-click **START_DEMO.cmd**.
-2. Two black windows open (test database and app), then the browser opens Site Control. First time takes a few minutes.
+2. Two black windows open (test database and app), then the browser opens the app. First time takes a few minutes.
 3. **Owner:** tap "Owner: sign in with Google". A *test* Google page appears: tap "Add new account", type
    `munnajaswal22@gmail.com`, tap "Sign in". (This is a pretend sign-in; no real Google account is used.)
 4. Tap the people icon (top right) → **Manage**: add a site, add a worker, choose their site and work, tap **Connect phone**.
@@ -30,10 +30,10 @@ It will open from a phone's home-screen icon called **"Site Control"**, like a n
 |---|---|
 | 1 | Screens you can click through on this computer, with sample (DEMO) data |
 | 2 | Real login: you sign in with Google; workers' phones are paired with a QR code; real attendance |
-| 3 | Real voice notes you can play; customer payment tracking controlled only by you |
+| 3 | Voice notes turned into text and dashboard cards by AI (site, work, payment); you can play every recording; payments verified only by you |
 | 4 | App online with HTTPS, installed on phones, real notifications to your phone |
 | 5 | A real Android home-screen widget for you |
-| 6 | Optional: automatic Hindi voice-to-text (costs explained first) |
+| 6 | Optional extras: daily summary, productivity reports |
 
 ## How workers log in
 No email, no password. You add the worker, tap **Connect phone**, and the worker scans the QR code with the
@@ -41,15 +41,12 @@ phone camera once (or types the 10-digit number). The code works once, for 15 mi
 If a phone is lost or a worker leaves, tap **Deactivate** — that phone loses access immediately.
 
 ## Money
-Expected cost: about ₹0–20 per month. From Phase 3 Google needs a card on file; we will set an alert
-that emails you if the bill ever goes above ₹100.
+Expected cost: about ₹0–20 per month for the app, plus roughly ₹50–250 per month for the AI that turns voice
+into text (you approved this; I will show exact prices before switching it on). From Phase 3 Google needs a card
+on file; we will set an alert that emails you if the bill ever goes above ₹500.
 
-## What you need to do now (about 10 minutes, free)
-In https://console.firebase.google.com → your project **site-control**:
-1. **Build → Authentication → Get started** → "Sign-in method" → turn on **Google** and **Anonymous**.
-2. **Build → Firestore Database → Create database** → location **asia-south1 (Mumbai)** → **production mode**.
-3. **Gear icon → Project settings → Your apps → Web (</>)** → name it "Site Control" → Register →
-   copy the `firebaseConfig` block and paste it to me. (It is not a password; it is safe to share with me.)
-4. Tell me the **Project ID** from the same settings page, and any other Gmail that should be an owner.
-
-After that, tell me: **"Start Phase 3"** (voice notes and customer payments).
+## What you need to do now
+1. Paste the **firebaseConfig** block and the **Project ID** in chat (Firebase console → gear icon → Project settings →
+   Your apps → your web app → "Config"). Your last message arrived without them.
+2. Tell me if any other Gmail should be an owner.
+3. When ready, tell me: **"Start Phase 3"**.

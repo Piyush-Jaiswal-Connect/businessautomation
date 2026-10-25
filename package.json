@@ -1,7 +1,7 @@
 {
   "name": "site-control",
   "private": true,
-  "description": "Firebase tooling for Site Control (emulators, security-rule tests, deploys)",
+  "description": "Firebase tooling for the Ayush Enterprises app (emulators, security-rule tests, deploys)",
   "scripts": {
     "emulators": "firebase emulators:start --project demo-site-control",
     "test:rules": "firebase emulators:exec --project demo-site-control --only firestore \"node --test firebase/tests/rules.test.mjs\""
