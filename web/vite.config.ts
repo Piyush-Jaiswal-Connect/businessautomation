@@ -26,6 +26,14 @@ export default defineConfig({
           { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
+      workbox: {
+        // Google sign-in pages (/__/auth/...) and other Firebase pages must always come from the server:
+        // answering them with the cached app turns the sign-in into an endless "Loading…".
+        navigateFallbackDenylist: [/^\/__\//, /^\/push\//],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+      },
     }),
   ],
   server: { host: true },

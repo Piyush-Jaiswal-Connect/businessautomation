@@ -18,6 +18,10 @@ enables the **Anonymous** provider.
   approve"; new voice report → "New voice report from Rajesh"; 9 am summary (approvals, reports to review, follow-ups
   due) only if something waits. English/Hindi per device. One message per event (`notificationLog/{eventId}`);
   dead tokens removed. In the emulator they are logged, not sent.
+- **Fix (2026-10-25):** owner Google sign-in looped on "Loading…": the offline service worker answered Google's
+  `/__/auth/handler` page with the cached app. Workbox now has `navigateFallbackDenylist: [/^\/__\//, /^\/push\//]`
+  + skipWaiting/clientsClaim (new version takes over at once); index.html also drops an old worker if it ever serves a
+  `/__/` page. Verified in a browser that had the old copy: the handler now reaches accounts.google.com.
 - **Clearer errors:** phone sign-in failure now says "sign-in is switched off in settings (code)" instead of "no network".
 - **Tests:** rules 35/35 (now on their own emulator port, so they never touch the everyday test database);
   `npm run test:functions` 1/1 (check-in + report → exactly one log entry each, right EN/HI words, no duplicates).

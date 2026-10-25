@@ -10,6 +10,13 @@
     <script>
       // The live app lives on the firebaseapp.com address: Google sign-in only works reliably on the same address
       // as its login page. Anyone who opens the web.app address is moved there (same page).
+      // Safety net: if an old offline copy of the app ever answers a Firebase sign-in page, drop that copy and
+      // reload so the real sign-in page comes from the server.
+      if (location.pathname.indexOf('/__/') === 0 && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister() })) })
+          .then(function () { location.reload() })
+      }
       if (location.hostname === 'businessautomation-2884f.web.app') {
         location.replace('https://businessautomation-2884f.firebaseapp.com' + location.pathname + location.search + location.hash)
       }
