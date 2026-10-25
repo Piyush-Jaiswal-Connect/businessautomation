@@ -1,7 +1,9 @@
 // Owner: add workers and sites, set each worker's site and work, connect/disconnect phones.
 import qrcode from 'qrcode-generator'
 import { useEffect, useState } from 'react'
+import type { PushState } from '../lib/push'
 import { signOutAndHome } from '../auth/AuthScreens'
+import { InstallCard } from '../components/Common'
 import { useStore } from '../data/OwnerStore'
 import { tradeNames, useLang } from '../i18n'
 import { auth } from '../lib/firebase'
@@ -53,6 +55,10 @@ export function ManagePage() {
           ))}
         </ul>
       </section>
+
+      <InstallCard dark />
+
+      <NotifyCard />
 
       <section className="o-panel">
         <h2>{t('settingsTitle')}</h2>
@@ -284,5 +290,51 @@ function AssignmentForm({ worker, current }: { worker: Worker; current?: Assignm
         </button>
       </div>
     </form>
+  )
+}
+
+/** Owner turns notifications on for this phone/PC. (Messaging code loads only when this card is used.) */
+function NotifyCard() {
+  const { t, lang } = useLang()
+  const [state, setState] = useState<PushState | 'busy' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    import('../lib/push').then((m) => m.pushState()).then(setState, () => setState('unsupported'))
+  }, [])
+
+  const run = async (on: boolean) => {
+    setError(null)
+    setState('busy')
+    try {
+      const m = await import('../lib/push')
+      setState(await (on ? m.enablePush(lang) : m.disablePush()))
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e))
+      setState('off')
+    }
+  }
+
+  return (
+    <section className="o-panel">
+      <h2>{t('notifyTitle')}</h2>
+      <p className="o-muted o-small">{t('notifyWhat')}</p>
+      {state === 'test' && <p className="o-muted o-small">{t('notifyTestMode')}</p>}
+      {state === 'unsupported' && <p className="o-amber o-small">{t('notifyUnsupported')}</p>}
+      {state === 'blocked' && <p className="o-amber o-small">{t('notifyBlocked')}</p>}
+      {state === 'on' && (
+        <div className="o-actions">
+          <Chip tone="green">{t('notifyEnabled')}</Chip>
+          <button className="o-btn" onClick={() => void run(false)}>{t('notifyOff')}</button>
+        </div>
+      )}
+      {(state === 'off' || state === 'busy') && (
+        <button className="o-btn o-btn-green" disabled={state === 'busy'} onClick={() => void run(true)}>
+          {state === 'busy' ? t('loading') : t('notifyOn')}
+        </button>
+      )}
+      {error && <p className="o-red o-small">{error}</p>}
+      <p className="o-muted o-small">{t('notifyDelay')}</p>
+    </section>
   )
 }

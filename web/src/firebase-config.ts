@@ -11,3 +11,7 @@ export const firebaseConfig: FirebaseOptions | null = {
   messagingSenderId: '841677442619',
   appId: '1:841677442619:web:234c77846eebd99d04d61e',
 }
+
+// Optional: a separate, card-free Firebase project used only for voice-to-text, so the AI can stay on Google's
+// free tier even after this project moves to the Blaze plan (for notifications). null = use the project above.
+export const aiFirebaseConfig: FirebaseOptions | null = null

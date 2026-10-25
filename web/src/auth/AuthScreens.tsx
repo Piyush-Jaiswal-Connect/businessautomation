@@ -2,7 +2,7 @@
 import { GoogleAuthProvider, getRedirectResult, signInAnonymously, signInWithRedirect, signOut } from 'firebase/auth'
 import { doc, getDocFromServer, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { useEffect, useState } from 'react'
-import { LangToggle, TestBanner } from '../components/Common'
+import { InstallCard, LangToggle, TestBanner } from '../components/Common'
 import { Icon } from '../components/Icon'
 import { errorText } from '../data/convert'
 import { useLang, type TKey } from '../i18n'
@@ -66,6 +66,7 @@ export function Landing() {
           <Icon name="chevron" />
         </button>
         {error && <p className="picker-error">{error}</p>}
+        <InstallCard dark />
       </main>
     </div>
   )
@@ -74,11 +75,14 @@ export function Landing() {
 /** A worker phone first gets its own anonymous sign-in, then shows the pairing screen. */
 export function StartPhone() {
   const { t } = useLang()
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
   useEffect(() => {
-    signInAnonymously(auth).catch(() => setFailed(true))
+    signInAnonymously(auth).catch((e) => setFailed(errorText(e)))
   }, [])
-  return <div className="center-note">{failed ? t('needNetwork') : t('loading')}</div>
+  if (!failed) return <div className="center-note">{t('loading')}</div>
+  // Offline is the usual reason; anything else is a settings problem the owner must fix.
+  const offline = !navigator.onLine || failed === 'auth/network-request-failed'
+  return <div className="center-note">{offline ? t('needNetwork') : t('phoneSignInOff', { code: failed })}</div>
 }
 
 /** Worker phone: enter (or arrive from the QR with) the owner's one-time code. */

@@ -1,9 +1,30 @@
 # PROJECT_STATUS — Ayush Enterprises app (project folder: site-control)
 
 ## CURRENT PHASE:
-**Phase 3 — Voice reports with AI + customer payments: BUILT and TESTED on the local test database with the REAL free
-Gemini AI (checkpoint P3).** Real project is set up: Firestore database in **Mumbai (asia-south1)**, security rules and
-index uploaded (2026-10-25). Waiting for owner approval to start Phase 4 (online app, phones, notifications).
+**Phase 4 — Online app, install, notifications: IN PROGRESS (checkpoint P4a).**
+Live at **https://businessautomation-2884f.firebaseapp.com**. Notifications built and emulator-tested, NOT live
+(server part needs the Blaze plan). Real-phone tests not done (owner). Worker phone sign-in blocked until the owner
+enables the **Anonymous** provider.
+
+## PHASE 4 SO FAR (2026-10-25):
+- **Hosting:** Firebase Hosting, default site. App address = `…firebaseapp.com` (same domain as Google's sign-in
+  handler, so redirect sign-in works in the installed app with no extra Google settings); `…web.app` redirects there.
+  Cache headers: index/sw/manifest no-cache, assets 1 year. `npm run deploy:web`.
+- **Install:** "Put the Ayush app on your home screen" card (Install button when Chrome offers it, else ⋮ steps) on
+  start screen, worker home and owner Manage. Manifest name "Ayush Enterprises", short "Ayush".
+- **Notifications (owner):** Manage → "Turn on notifications" stores this device's FCM token in
+  `ownerDevices/{uid}/tokens/{token}` (owner-only rule + test). `public/push-sw.js` (own scope `/push/`) shows them;
+  tap opens the right page. Server `functions/index.js` (asia-south1): check-in → "Rajesh started work · 9:08 am · tap to
+  approve"; new voice report → "New voice report from Rajesh"; 9 am summary (approvals, reports to review, follow-ups
+  due) only if something waits. English/Hindi per device. One message per event (`notificationLog/{eventId}`);
+  dead tokens removed. In the emulator they are logged, not sent.
+- **Clearer errors:** phone sign-in failure now says "sign-in is switched off in settings (code)" instead of "no network".
+- **Tests:** rules 35/35 (now on their own emulator port, so they never touch the everyday test database);
+  `npm run test:functions` 1/1 (check-in + report → exactly one log entry each, right EN/HI words, no duplicates).
+  Live checks: web.app→firebaseapp.com redirect, manifest, offline worker, sign-in handler all 200; app loads in Hindi,
+  no TEST banner, no console errors; Google provider enabled; **Anonymous provider disabled** (ADMIN_ONLY_OPERATION).
+- **Option prepared:** `aiFirebaseConfig` in `web/src/firebase-config.ts` lets voice-to-text run in a separate card-free
+  project (keeps AI free after Blaze).
 
 ## COMPLETED:
 - P0 setup · P1 screens · P2 login, phone pairing, attendance, approvals (see git history and ARCHITECTURE.md).
@@ -64,6 +85,8 @@ Phase 3 (P3):
 - `npm run build`, `npm run lint` clean.
 
 ## TESTS NOT RUN:
+- Phase 4: real phones (install, QR pairing, mic, offline, two phones), owner Google sign-in on the live app,
+  push delivery to a phone, 9 am summary (needs Google's scheduler), functions deploy (needs Blaze).
 - **Real microphone and real phones** (test browser blocks the mic; test messages were computer-generated Hindi
   voices, clearer than a real site with noise). Real-world accuracy must be checked with your workers.
 - Real project: nobody has signed in yet. Owner Google sign-in should be tested on the hosted app (Phase 4): on
@@ -96,11 +119,15 @@ Phase 3 (P3):
 - Verified from outside: reading workers/sites/jobs/payments/recordings and writing without sign-in → PERMISSION_DENIED.
 
 ## MANUAL ACTION REQUIRED (owner):
-1. Try it on this PC: double-click `START_DEMO.cmd` (test database + real AI) and speak a real message as a worker.
-2. Phase 4 needs: an Android phone for each side to test, and later the Blaze plan for notifications.
+1. Firebase console → Authentication → Sign-in method → **Add new provider → Anonymous → Enable** (worker phones need it).
+2. Choose notifications option A / B / C (START_HERE.md). A or B: upgrade to **Blaze** + budget alert.
+   Linking billing ends the free AI tier for THIS project (paid AI ≈ ₹100–250/month at ~50 messages/day) unless
+   option B (separate free AI project) is used.
+3. Real-phone checklist in START_HERE.md.
 
 ## NEXT EXACT ACTION:
-1. Phase 4 (on approval): Firebase Hosting (https), install on phones, real phone tests (mic, offline, two phones),
-   owner push notifications (Blaze + Cloud Function), and move AI processing to a server function if Blaze is
-   enabled (so text appears even when the owner app is closed). Set `authDomain` to the hosting domain so Google
-   sign-in works inside the installed app; first owner sign-in on the real project.
+1. After Anonymous is enabled: owner signs in on the live app (phone), pairs a worker phone, runs the checklist.
+2. After Blaze (A or B): `npm run deploy:functions` (asia-south1; set artifact clean-up policy when asked), owner turns
+   on notifications, test a check-in notification on a real phone. For B: create the AI project, enable AI Logic there,
+   paste its config into `aiFirebaseConfig`, redeploy web.
+3. Then checkpoint P4 complete → Phase 5 (Android widget) on approval.

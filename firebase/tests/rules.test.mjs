@@ -63,8 +63,13 @@ async function pairA() {
 
 before(async () => {
   env = await initializeTestEnvironment({
-    projectId: 'demo-site-control',
-    firestore: { rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: 8080 },
+    // Separate project and port from the everyday test database, so running tests never touches its data.
+    projectId: 'demo-site-control-test',
+    firestore: {
+      rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'),
+      host: '127.0.0.1',
+      port: Number((process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8180').split(':')[1]),
+    },
   })
 })
 beforeEach(async () => {
@@ -340,5 +345,17 @@ describe('customer money', () => {
     await assertFails(getDoc(doc(phone('phoneA'), 'jobs/s1')))
     await assertFails(getDocs(collection(phone('phoneA'), 'payments')))
     await assertFails(jobBatch(phone('phoneA'), 's1', 'j3'))
+  })
+})
+
+describe('owner notification devices', () => {
+  test('owner stores own device token; workers and others cannot', async () => {
+    const data = (t) => ({ token: t, lang: 'en', userAgent: 'test', createdAt: serverTimestamp() })
+    await assertSucceeds(setDoc(doc(owner(), 'ownerDevices/owner1/tokens/tok1'), data('tok1')))
+    await assertFails(setDoc(doc(owner(), 'ownerDevices/someoneElse/tokens/tok2'), data('tok2')))
+    await pairA()
+    await assertFails(setDoc(doc(phone('phoneA'), 'ownerDevices/phoneA/tokens/tok3'), data('tok3')))
+    await assertFails(getDoc(doc(phone('phoneA'), 'ownerDevices/owner1/tokens/tok1')))
+    await assertFails(getDoc(doc(owner(), 'notificationLog/x')))
   })
 })

@@ -318,6 +318,18 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------- owner notifications ----------
+
+    // Each owner device's push address. The server (Cloud Functions, which bypass these rules) reads them to send.
+    match /ownerDevices/{uid}/tokens/{token} {
+      allow read, delete: if isOwner() && request.auth.uid == uid;
+      allow create, update: if isOwner() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['token', 'lang', 'userAgent', 'createdAt'])
+        && request.resource.data.token == token
+        && request.resource.data.createdAt == request.time;
+    }
+    // notificationLog: written only by the server (no client access).
+
     // ---------- audit trail ----------
 
     match /auditLog/{entryId} {

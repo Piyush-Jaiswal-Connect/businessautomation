@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { LangContext, loadLang, makeT, saveLang, useLang } from '../i18n'
 import { usingEmulators } from '../lib/firebase'
+import { useInstall } from '../lib/install'
 import type { Lang } from '../types'
 import { Icon } from './Icon'
 
@@ -40,5 +41,25 @@ export function TestBanner() {
     <div className="demo-banner" role="note">
       <strong>TEST</strong> {t('testDb')}
     </div>
+  )
+}
+
+/** Shown until the app is installed: one button where Chrome allows it, otherwise the two manual steps. */
+export function InstallCard({ dark = false }: { dark?: boolean }) {
+  const { t } = useLang()
+  const { installed, canPrompt, install } = useInstall()
+  if (installed) return null
+  return (
+    <section className={`install-card ${dark ? 'install-dark' : ''}`}>
+      <div className="install-title">
+        <img src="/icons/icon-192.png" alt="" width={36} height={36} />
+        {t('installTitle')}
+      </div>
+      {canPrompt ? (
+        <button className="install-btn" onClick={() => void install()}>{t('installButton')}</button>
+      ) : (
+        <p className="install-steps">{t('installManual')}</p>
+      )}
+    </section>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LangToggle, TestBanner } from '../components/Common'
+import { InstallCard, LangToggle, TestBanner } from '../components/Common'
 import { Icon } from '../components/Icon'
 import { getLocation, useWorkerStore, type SentReport } from '../data/WorkerStore'
 import { useLang } from '../i18n'
@@ -59,6 +59,8 @@ export function WorkerHome() {
         <VoiceBlock onSend={(r) => store.sendReport(worker.id, r)} />
 
         <SentList reports={store.sentToday} />
+
+        <InstallCard />
       </main>
 
       <footer className="w-footer">

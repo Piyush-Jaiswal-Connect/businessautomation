@@ -179,3 +179,46 @@ textarea:focus-visible {
   color: #fca5a5;
   margin: 0;
 }
+
+.install-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fff;
+  border: 2px solid #cbd5e1;
+  color: #0f172a;
+}
+
+.install-dark {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.install-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.install-title img {
+  border-radius: 8px;
+}
+
+.install-btn {
+  min-height: 52px;
+  border-radius: 14px;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.install-steps {
+  margin: 0;
+  font-size: 16px;
+}

@@ -27,7 +27,7 @@ export const realAi = !!firebaseConfig && (!usingEmulators || import.meta.env.VI
 /** False until the real project's web config is pasted into firebase-config.ts. */
 export const configured = usingEmulators || firebaseConfig !== null
 
-const app = initializeApp(usingEmulators || !firebaseConfig ? emulatorConfig : firebaseConfig)
+export const app = initializeApp(usingEmulators || !firebaseConfig ? emulatorConfig : firebaseConfig)
 
 export const auth = getAuth(app)
 

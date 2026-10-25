@@ -4,8 +4,28 @@
       "collectionGroup": "reports",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deviceUid", "order": "ASCENDING" },
-        { "fieldPath": "deviceTime", "order": "ASCENDING" }
+        {
+          "fieldPath": "deviceUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "deviceTime",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "attendance",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

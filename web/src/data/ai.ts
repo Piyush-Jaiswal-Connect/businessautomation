@@ -2,7 +2,7 @@
 // Runs on the owner's dashboard only, so a worker cannot change the result.
 import { initializeApp } from 'firebase/app'
 import { GoogleAIBackend, getAI, getGenerativeModel } from 'firebase/ai'
-import { firebaseConfig } from '../firebase-config'
+import { aiFirebaseConfig, firebaseConfig } from '../firebase-config'
 import { realAi } from '../lib/firebase'
 import type { ReportAi, Site } from '../types'
 
@@ -12,7 +12,7 @@ import type { ReportAi, Site } from '../types'
 export const AI_MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash-lite']
 const TIMEOUT_MS = 60_000
 
-const aiApp = realAi ? initializeApp(firebaseConfig!, 'ai') : null
+const aiApp = realAi ? initializeApp(aiFirebaseConfig ?? firebaseConfig!, 'ai') : null
 
 const fields = {
   transcript: { type: 'string', description: 'Exactly what was said. Hindi words in Devanagari, English words in Latin script. Empty if nothing audible.' },

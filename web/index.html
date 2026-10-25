@@ -7,6 +7,13 @@
     <meta name="theme-color" content="#0f172a" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ayush Enterprises</title>
+    <script>
+      // The live app lives on the firebaseapp.com address: Google sign-in only works reliably on the same address
+      // as its login page. Anyone who opens the web.app address is moved there (same page).
+      if (location.hostname === 'businessautomation-2884f.web.app') {
+        location.replace('https://businessautomation-2884f.firebaseapp.com' + location.pathname + location.search + location.hash)
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
