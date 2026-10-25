@@ -18,6 +18,12 @@ const emulatorConfig: FirebaseOptions = {
   appId: 'demo-app',
 }
 
+/**
+ * Voice-to-text uses the real Gemini of the real project. With the local test database it is a stand-in,
+ * unless VITE_REAL_AI=true (then only the AI call goes to the real project; data stays local).
+ */
+export const realAi = !!firebaseConfig && (!usingEmulators || import.meta.env.VITE_REAL_AI === 'true')
+
 /** False until the real project's web config is pasted into firebase-config.ts. */
 export const configured = usingEmulators || firebaseConfig !== null
 

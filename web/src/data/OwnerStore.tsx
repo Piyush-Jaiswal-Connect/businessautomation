@@ -1,13 +1,16 @@
 // Owner's live view of the database. Every list updates by itself when a phone writes.
 import {
-  Timestamp, collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc,
+  Timestamp, collection, doc, getDoc, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc,
   updateDoc, where, writeBatch,
 } from 'firebase/firestore'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { auth, db } from '../lib/firebase'
 import { dayKey } from '../lib/format'
-import type { Assignment, Attendance, AuditEntry, Job, Payment, Report, Settings, Site, Text, Trade, Worker } from '../types'
-import { errorText, ms, toAssignment, toAttendance, toSite, toWorker } from './convert'
+import type {
+  Assignment, Attendance, AuditEntry, Job, Payment, Report, ReportAi, Settings, Site, Text, Trade, Worker, WorkStatus,
+} from '../types'
+import { errorText, ms, toAssignment, toAttendance, toJob, toPayment, toReport, toSite, toWorker } from './convert'
+import { audioBlobFrom, cleanOldRecordings, useAiProcessor } from './processor'
 
 interface AuditRow {
   target: string
@@ -36,6 +39,9 @@ function useOwnerStoreValue() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [rawAttendance, setRawAttendance] = useState<Attendance[]>([])
   const [audit, setAudit] = useState<AuditRow[]>([])
+  const [reports, setReports] = useState<Report[]>([])
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
   const [settings, setSettings] = useState<Settings>({ askLocation: false })
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +56,11 @@ function useOwnerStoreValue() {
       onSnapshot(collection(db, 'sites'), (s) => setSites(s.docs.map(toSite).sort((a, b) => a.name.en.localeCompare(b.name.en))), fail),
       onSnapshot(collection(db, 'assignments'), (s) => setAssignments(s.docs.map(toAssignment)), fail),
       onSnapshot(doc(db, 'config/settings'), (s) => setSettings({ askLocation: s.data()?.askLocation === true }), fail),
+      // Only reports the server has received (a phone's unsent ones are never shown as received).
+      onSnapshot(query(collection(db, 'reports'), orderBy('deviceTime', 'desc'), limit(300)), (s) =>
+        setReports(s.docs.filter((d) => d.data().serverTime).map(toReport)), fail),
+      onSnapshot(collection(db, 'jobs'), (s) => setJobs(s.docs.map(toJob)), fail),
+      onSnapshot(query(collection(db, 'payments'), orderBy('date', 'desc')), (s) => setPayments(s.docs.map(toPayment)), fail),
       onSnapshot(query(collection(db, 'auditLog'), orderBy('at', 'desc'), limit(300)), (s) =>
         setAudit(
           s.docs.map((d) => {
@@ -58,8 +69,12 @@ function useOwnerStoreValue() {
           }),
         ), fail),
     ]
+    cleanOldRecordings().catch(() => {}) // tidy up once per session
     return () => unsubs.forEach((u) => u())
   }, [])
+
+  // New voice reports -> text + fields (while this dashboard is open).
+  useAiProcessor(reports, workers, sites)
 
   useEffect(
     () =>
@@ -83,12 +98,28 @@ function useOwnerStoreValue() {
     [rawAttendance, audit],
   )
   const attendanceRef = useRefValue(attendance)
+  const jobsRef = useRefValue(jobs)
 
   const actions = useMemo(() => {
     const me = () => auth.currentUser!
     const fail = (e: unknown) => {
       setError(errorText(e))
       throw e
+    }
+
+    function saveJob(siteId: string, patch: Partial<Omit<Job, 'id'>>, action: string) {
+      const current = jobsRef.current.find((j) => j.id === siteId)
+      const base = current ?? { customer: '', description: '', agreedCharge: 0, workStatus: 'in_progress' as WorkStatus, followUpDate: null, notes: '' }
+      const { id: _drop, ...next } = { id: siteId, ...base, ...patch }
+      void _drop
+      const b = writeBatch(db)
+      const auditRef = doc(collection(db, 'auditLog'))
+      b.set(auditRef, {
+        at: serverTimestamp(), by: me().uid, byEmail: me().email, target: `jobs/${siteId}`, action,
+        note: null, before: current ? JSON.stringify(current) : null, after: JSON.stringify(next),
+      })
+      b.set(doc(db, 'jobs', siteId), { ...next, updatedAt: serverTimestamp(), lastAuditId: auditRef.id })
+      return b.commit().catch(fail)
     }
 
     function decide(a: Attendance, status: 'approved' | 'rejected', action: string, extra: Record<string, unknown> = {}, note: string | null = null) {
@@ -148,19 +179,49 @@ function useOwnerStoreValue() {
 
       setAskLocation: (askLocation: boolean) => setDoc(doc(db, 'config/settings'), { askLocation }).catch(fail),
 
-      // Phase 3 (voice reports and payments) — screens exist, data not connected yet.
-      reviewReport: (id: string) => void id,
-      approveCompletion: (jobId: string) => void jobId,
-      addPayment: (jobId: string, amount: number, evidence: string) => void [jobId, amount, evidence],
+      // ---------- voice reports ----------
+      reviewReport: (id: string, reviewed = true) =>
+        updateDoc(doc(db, 'reports', id), { reviewed, reviewedBy: me().uid, reviewedAt: serverTimestamp() }).catch(fail),
+      retryReport: (id: string) => updateDoc(doc(db, 'reports', id), { status: 'new', aiError: null }).catch(fail),
+      /** Owner corrects what the AI understood. The first AI answer is kept in aiOriginal. */
+      editReport(r: Report, patch: Partial<ReportAi>) {
+        const ai = { ...r.ai!, ...patch }
+        return updateDoc(doc(db, 'reports', r.id), {
+          ai, edited: true, ...(r.edited ? {} : { aiOriginal: r.ai }), editedBy: me().uid, editedAt: serverTimestamp(),
+        }).catch(fail)
+      },
+      async loadAudio(reportId: string): Promise<Blob | null> {
+        const a = await getDoc(doc(db, 'reportAudio', reportId))
+        return a.exists() ? audioBlobFrom(a.data() as never) : null
+      },
+
+      // ---------- customer money (each change also writes an audit entry) ----------
+      saveJob: (siteId: string, patch: Partial<Omit<Job, 'id'>>) => saveJob(siteId, patch, 'job_saved'),
+      approveFinished: (siteId: string) => saveJob(siteId, { workStatus: 'owner_approved' as WorkStatus }, 'work_approved'),
+      async addPayment(siteId: string, amount: number, evidence: string, reportId: string | null = null) {
+        if (!jobsRef.current.some((j) => j.id === siteId)) await saveJob(siteId, {}, 'job_created')
+        const b = writeBatch(db)
+        const pay = doc(collection(db, 'payments'))
+        const auditRef = doc(collection(db, 'auditLog'))
+        b.set(auditRef, {
+          at: serverTimestamp(), by: me().uid, byEmail: me().email, target: `payments/${pay.id}`,
+          action: amount < 0 ? 'payment_reversed' : 'payment_verified', note: evidence, before: null, after: amount,
+        })
+        b.set(pay, {
+          jobId: siteId, amount, date: Timestamp.now(), evidence, reportId, verifiedBy: me().uid,
+          createdAt: serverTimestamp(), lastAuditId: auditRef.id,
+        })
+        if (reportId) b.update(doc(db, 'reports', reportId), { paymentId: pay.id })
+        return b.commit().catch(fail)
+      },
 
       clearError: () => setError(null),
     }
-  }, [attendanceRef])
+  }, [attendanceRef, jobsRef])
 
   return {
     today, loaded, error, settings,
-    workers, sites, assignments, attendance,
-    reports: [] as Report[], jobs: [] as Job[], payments: [] as Payment[],
+    workers, sites, assignments, attendance, reports, jobs, payments,
     ...actions,
   }
 }

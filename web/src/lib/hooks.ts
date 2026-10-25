@@ -28,6 +28,8 @@ export const go = (route: string) => {
 }
 
 const MAX_SECONDS = 180 // a work update longer than 3 minutes stops by itself
+// Recordings are stored in the database, which allows ~1 MB per record: stop safely before that.
+const MAX_BYTES = 850 * 1024
 
 export type RecorderState =
   | { kind: 'idle' }
@@ -35,13 +37,17 @@ export type RecorderState =
   | { kind: 'done'; url: string; blob: Blob; seconds: number }
   | { kind: 'error'; reason: 'denied' | 'unavailable' }
 
-/** Records from the phone microphone. The recording stays on the phone (Phase 3 uploads it). */
-export function useRecorder() {
+/** Records from the phone microphone. onFinished gets the recording when it stops (tap or limit). */
+export function useRecorder(onFinished?: (blob: Blob, seconds: number) => void) {
   const [state, setState] = useState<RecorderState>({ kind: 'idle' })
   const rec = useRef<MediaRecorder | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const started = useRef(0)
   const urlRef = useRef<string | null>(null)
+  const finishedRef = useRef(onFinished)
+  useEffect(() => {
+    finishedRef.current = onFinished
+  }, [onFinished])
 
   const cleanupStream = () => {
     window.clearInterval(timer.current)
@@ -67,9 +73,15 @@ export function useRecorder() {
       return
     }
     const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported(m))
-    const r = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 32_000 } : undefined)
+    const r = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24_000 } : undefined)
     const chunks: Blob[] = []
-    r.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data)
+    let bytes = 0
+    r.ondataavailable = (ev) => {
+      if (!ev.data.size) return
+      chunks.push(ev.data)
+      bytes += ev.data.size
+      if (bytes >= MAX_BYTES && r.state === 'recording') r.stop()
+    }
     r.onstop = () => {
       const seconds = (Date.now() - started.current) / 1000
       const blob = new Blob(chunks, { type: r.mimeType || 'audio/webm' })
@@ -78,10 +90,11 @@ export function useRecorder() {
       const url = URL.createObjectURL(blob)
       urlRef.current = url
       setState({ kind: 'done', url, blob, seconds })
+      finishedRef.current?.(blob, seconds)
     }
     rec.current = r
     started.current = Date.now()
-    r.start()
+    r.start(1000) // a chunk every second, so the size limit is checked while recording
     setState({ kind: 'recording', seconds: 0 })
     timer.current = window.setInterval(() => {
       const seconds = (Date.now() - started.current) / 1000

@@ -2,13 +2,13 @@ import { LangToggle, TestBanner } from '../components/Common'
 import { Icon, type IconName } from '../components/Icon'
 import { useStore } from '../data/OwnerStore'
 import { useLang, type TKey } from '../i18n'
-import { at, fmtLongDate, fmtTime } from '../lib/format'
+import { at, fmtLongDate, fmtTime, rupees } from '../lib/format'
 import { go } from '../lib/hooks'
-import { awaitsApproval, isPresent } from '../lib/summary'
+import { awaitsApproval, balanceOf, followUpsDue, isPresent, totalOutstanding } from '../lib/summary'
 import { AttendancePage } from './AttendancePage'
 import { ManagePage } from './ManagePage'
 import { PaymentsPage } from './PaymentsPage'
-import { ReportsPage } from './ReportsPage'
+import { ReportCard, ReportsPage, needsPaymentCheck } from './ReportsPage'
 import { SitesPage } from './SitesPage'
 import { useNames } from './shared'
 import './owner.css'
@@ -27,6 +27,7 @@ export function OwnerApp({ tab }: { tab: string }) {
   const current = tab === 'manage' || tabs.some(([id]) => id === tab) ? tab : 'home'
   const badges: Record<string, number> = {
     attendance: store.attendance.filter((a) => a.date === store.today && awaitsApproval(a)).length,
+    reports: store.reports.filter((r) => !r.reviewed).length,
   }
 
   return (
@@ -81,29 +82,34 @@ export function OwnerApp({ tab }: { tab: string }) {
 function OwnerHome() {
   const store = useStore()
   const { t } = useLang()
-  const { workerName, siteName } = useNames()
+  const { workerName } = useNames()
 
   const todays = store.attendance.filter((a) => a.date === store.today)
   const activeWorkers = store.workers.filter((w) => w.active)
   const present = todays.filter(isPresent).length
   const awaiting = todays.filter(awaitsApproval).length
   const activeSites = store.sites.filter((s) => s.active).length
-  const paired = activeWorkers.filter((w) => w.deviceUid).length
-  const unpaired = activeWorkers.length - paired
-  const noSite = activeWorkers.filter((w) => !store.assignments.some((a) => a.workerId === w.id)).length
+  const unpaired = activeWorkers.filter((w) => !w.deviceUid).length
+  const toReview = store.reports.filter((r) => !r.reviewed)
+  const failed = store.reports.filter((r) => r.status === 'failed').length
+  const toVerify = store.reports.filter(needsPaymentCheck).length
+  const outstanding = totalOutstanding(store.jobs, store.payments)
+  const owingJobs = store.jobs.filter((j) => balanceOf(j, store.payments) > 0).length
+  const followUps = followUpsDue(store.jobs, store.payments, store.today).length
 
   const attention = (
     [
       [awaiting, t('attnApprove', { n: awaiting }), '/owner/attendance'],
+      [toReview.length, t('attnReports', { n: toReview.length }), '/owner/reports'],
+      [toVerify, t('attnVerify', { n: toVerify }), '/owner/reports'],
+      [followUps, t('attnFollowUp', { n: followUps }), '/owner/payments'],
+      [failed, t('attnAiFailed', { n: failed }), '/owner/reports'],
       [unpaired, t('attnUnpaired', { n: unpaired }), '/owner/manage'],
-      [noSite, t('attnNoSite', { n: noSite }), '/owner/manage'],
     ] as [number, string, string][]
   ).filter(([n]) => n > 0)
 
-  const activity = todays
-    .flatMap((a) => [
-      { at: a.deviceTime, text: t('actCheckIn', { name: workerName(a.workerId), site: siteName(a.siteId) }), icon: 'check' as const },
-    ])
+  const checkIns = todays
+    .map((a) => ({ at: a.deviceTime, text: t('actCheckIn', { name: workerName(a.workerId), site: '' }).replace(/ — $/, '') }))
     .sort((a, b) => b.at - a.at)
     .slice(0, 8)
 
@@ -115,23 +121,21 @@ function OwnerHome() {
           <span className="o-card-value">
             {present}<small>/{activeWorkers.length}</small>
           </span>
-          <span className="o-card-sub">{awaiting > 0 ? t('nAwaiting', { n: awaiting }) : ' '}</span>
+          <span className="o-card-sub">{awaiting > 0 ? t('nAwaiting', { n: awaiting }) : '\u00a0'}</span>
+        </button>
+        <button className={`o-card ${toReview.length ? 'o-card-alert' : ''}`} onClick={() => go('/owner/reports')}>
+          <span className="o-card-label">{t('reportsPending')}</span>
+          <span className="o-card-value">{toReview.length}</span>
+          <span className="o-card-sub">&nbsp;</span>
+        </button>
+        <button className="o-card" onClick={() => go('/owner/payments')}>
+          <span className="o-card-label">{t('outstanding')}</span>
+          <span className="o-card-value o-money">{rupees(outstanding)}</span>
+          <span className="o-card-sub">{owingJobs ? t('nJobs', { n: owingJobs }) : '\u00a0'}</span>
         </button>
         <button className="o-card" onClick={() => go('/owner/sites')}>
           <span className="o-card-label">{t('activeSites')}</span>
           <span className="o-card-value">{activeSites}</span>
-          <span className="o-card-sub">&nbsp;</span>
-        </button>
-        <button className={`o-card ${awaiting ? 'o-card-alert' : ''}`} onClick={() => go('/owner/attendance')}>
-          <span className="o-card-label">{t('toApprove')}</span>
-          <span className="o-card-value">{awaiting}</span>
-          <span className="o-card-sub">&nbsp;</span>
-        </button>
-        <button className="o-card" onClick={() => go('/owner/manage')}>
-          <span className="o-card-label">{t('phonesPaired')}</span>
-          <span className="o-card-value">
-            {paired}<small>/{activeWorkers.length}</small>
-          </span>
           <span className="o-card-sub">&nbsp;</span>
         </button>
       </section>
@@ -155,15 +159,31 @@ function OwnerHome() {
         )}
       </section>
 
+      {toReview.length > 0 && (
+        <section>
+          <h2 className="o-h2">{t('reportsToday')}</h2>
+          <ul className="o-stack">
+            {toReview.slice(0, 3).map((r) => (
+              <ReportCard key={r.id} r={r} />
+            ))}
+          </ul>
+          {toReview.length > 3 && (
+            <button className="o-btn o-wide o-top" onClick={() => go('/owner/reports')}>
+              {t('navReports')} ({toReview.length}) <Icon name="chevron" size={18} />
+            </button>
+          )}
+        </section>
+      )}
+
       <section className="o-panel">
         <h2>{t('recentActivity')}</h2>
-        {activity.length === 0 ? (
+        {checkIns.length === 0 ? (
           <p className="o-muted">{t('noActivity')}</p>
         ) : (
           <ul className="o-feed">
-            {activity.map((a) => (
-              <li key={`${a.icon}${a.at}${a.text}`}>
-                <Icon name={a.icon} size={18} />
+            {checkIns.map((a) => (
+              <li key={`${a.at}${a.text}`}>
+                <Icon name="check" size={18} />
                 <span>{a.text}</span>
                 <time>{fmtTime(a.at)}</time>
               </li>

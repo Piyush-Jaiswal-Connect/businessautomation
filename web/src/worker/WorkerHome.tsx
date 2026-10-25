@@ -1,15 +1,15 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LangToggle, TestBanner } from '../components/Common'
 import { Icon } from '../components/Icon'
-import { useWorkerStore } from '../data/WorkerStore'
+import { getLocation, useWorkerStore, type SentReport } from '../data/WorkerStore'
 import { useLang } from '../i18n'
 import { fmtTime, mmss } from '../lib/format'
 import { useOnline, useRecorder } from '../lib/hooks'
-import type { Attendance, PaymentClaim, WorkClaim } from '../types'
+import type { Attendance, GeoPoint } from '../types'
 import './worker.css'
 
-// Voice reports are switched on in Phase 3 (needs file storage).
-const VOICE_ENABLED = false
+const CANCEL_SECONDS = 5 // time to cancel after stopping, then the report sends by itself
+const MIN_SECONDS = 2 // shorter recordings are almost always a mistaken tap
 
 export function WorkerHome() {
   const store = useWorkerStore()
@@ -32,7 +32,8 @@ export function WorkerHome() {
       )}
 
       <main className="w-main">
-        {assignment && site ? (
+        {/* A site is shown only if the owner assigned one; workers move between sites during the day. */}
+        {assignment && site && (
           <section className="w-site" aria-label={t('todaySite')}>
             <div className="w-label">{t('todaySite')}</div>
             <div className="w-site-name">{tx(site.name)}</div>
@@ -40,36 +41,24 @@ export function WorkerHome() {
               <span className="w-label">{t('todayWork')}:</span> {tx(assignment.task)}
             </div>
           </section>
-        ) : (
-          <section className="w-site w-nosite">
-            <Icon name="alert" size={32} />
-            {t('noSiteToday')}
-          </section>
         )}
 
-        {/* Attendance already marked today stays visible even if the owner changed the site since. */}
-        {((assignment && site) || attendance) && (
-          <AttendanceBlock
-            attendance={attendance ?? undefined}
-            locating={store.locating}
-            onCheckIn={() => assignment && store.checkIn(worker.id, assignment.siteId, store.settings.askLocation)}
-            onCheckOut={() => attendance && store.checkOut(attendance.id)}
-          />
-        )}
+        <AttendanceBlock
+          attendance={attendance ?? undefined}
+          locating={store.locating}
+          onCheckIn={() => store.checkIn(worker.id, assignment && site ? assignment.siteId : null, store.settings.askLocation)}
+          onCheckOut={() => attendance && store.checkOut(attendance.id)}
+        />
 
         {store.error && (
           <div className="w-error" role="alert">
-            <Icon name="alert" /> {t('checkInFailed')}
+            <Icon name="alert" /> {t('sendFailed')}
           </div>
         )}
 
-        {assignment && site && (VOICE_ENABLED ? (
-          <VoiceBlock onSend={() => {}} />
-        ) : (
-          <div className="w-soon">
-            <Icon name="mic" size={28} /> {t('voiceSoon')}
-          </div>
-        ))}
+        <VoiceBlock onSend={(r) => store.sendReport(worker.id, r)} />
+
+        <SentList reports={store.sentToday} />
       </main>
 
       <footer className="w-footer">
@@ -93,7 +82,7 @@ function AttendanceBlock({ attendance, locating, onCheckIn, onCheckOut }: {
       <button className="w-big w-big-green" onClick={onCheckIn} disabled={locating}>
         <span className="w-big-icon"><Icon name="check" size={44} /></span>
         <span className="w-big-text">{t('markAttendance')}</span>
-        {locating && <span className="w-big-sub">{t('gettingLocation')}</span>}
+        <span className="w-big-sub">{locating ? t('gettingLocation') : t('startWorkHint')}</span>
       </button>
     )
   }
@@ -137,69 +126,90 @@ function AttendanceBlock({ attendance, locating, onCheckIn, onCheckOut }: {
   )
 }
 
-export interface NewReport {
+interface ReadyReport {
+  blob: Blob
   durationSec: number
-  audioUrl: string | null
-  workClaim: WorkClaim
-  paymentClaim: PaymentClaim
+  location: GeoPoint | null
 }
 
-function VoiceBlock({ onSend }: { onSend: (r: NewReport) => void }) {
+/** Tap mic → speak → tap stop → sends by itself after a few seconds (with a cancel button). */
+function VoiceBlock({ onSend }: { onSend: (r: ReadyReport) => void }) {
   const { t } = useLang()
-  const { state, start, stop, reset } = useRecorder()
-  const [workClaim, setWorkClaim] = useState<WorkClaim>(null)
-  const [paymentClaim, setPaymentClaim] = useState<PaymentClaim>(null)
-  const [sent, setSent] = useState(false)
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const [notice, setNotice] = useState<'sent' | 'tooShort' | null>(null)
+  const pending = useRef<{ blob: Blob; seconds: number } | null>(null)
+  const location = useRef<Promise<GeoPoint | null> | null>(null)
+  const timer = useRef<number | undefined>(undefined)
 
-  const send = () => {
-    if (state.kind !== 'done') return
-    onSend({ durationSec: Math.round(state.seconds), audioUrl: state.url, workClaim, paymentClaim })
-    reset(true) // the sent report keeps using this audio
-    setWorkClaim(null)
-    setPaymentClaim(null)
-    setSent(true)
-    window.setTimeout(() => setSent(false), 4000)
+  const flash = (n: 'sent' | 'tooShort') => {
+    setNotice(n)
+    window.setTimeout(() => setNotice(null), 5000)
+  }
+
+  const onFinished = useCallback((blob: Blob, seconds: number) => {
+    if (seconds < MIN_SECONDS) {
+      flash('tooShort')
+      return
+    }
+    pending.current = { blob, seconds }
+    setCountdown(CANCEL_SECONDS)
+  }, [])
+
+  const { state, start, stop, reset } = useRecorder(onFinished)
+
+  // Count down, then send.
+  useEffect(() => {
+    if (countdown === null) return
+    if (countdown > 0) {
+      timer.current = window.setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000)
+      return () => window.clearTimeout(timer.current)
+    }
+    const p = pending.current
+    pending.current = null
+    // Location was requested when recording started; wait at most 3 more seconds for it.
+    const loc = Promise.race([location.current ?? Promise.resolve(null), new Promise<null>((r) => setTimeout(() => r(null), 3000))])
+    loc.then((l) => {
+      if (p) onSend({ blob: p.blob, durationSec: p.seconds, location: l })
+      setCountdown(null)
+      reset()
+      flash('sent')
+    })
+  }, [countdown, onSend, reset])
+
+  const begin = () => {
+    setNotice(null)
+    location.current = getLocation() // only at this moment, never in the background
+    start()
+  }
+
+  const cancel = () => {
+    window.clearTimeout(timer.current)
+    pending.current = null
+    setCountdown(null)
+    reset()
   }
 
   if (state.kind === 'recording') {
     return (
-      <button className="w-big w-big-red" onClick={stop}>
-        <span className="w-big-icon w-pulse"><Icon name="stop" size={40} /></span>
-        <span className="w-big-text">
-          {t('stop')} <span className="w-timer">{mmss(state.seconds)}</span>
-        </span>
-        <span className="w-big-sub">{t('recordingNow')}</span>
-      </button>
+      <>
+        <button className="w-big w-big-red" onClick={stop}>
+          <span className="w-big-icon w-pulse"><Icon name="stop" size={40} /></span>
+          <span className="w-big-text">
+            {t('stop')} <span className="w-timer">{mmss(state.seconds)}</span>
+          </span>
+          <span className="w-big-sub">{t('recordingNow')}</span>
+        </button>
+        <p className="w-hint">{t('reportHint')}</p>
+      </>
     )
   }
 
-  if (state.kind === 'done') {
+  if (countdown !== null) {
     return (
-      <section className="w-review">
-        <audio className="w-audio" src={state.url} controls preload="metadata" />
-        <Question
-          label={t('workDoneQ')}
-          value={workClaim}
-          onChange={setWorkClaim}
-          options={[
-            ['completed', t('yesFinished')],
-            ['in_progress', t('stillGoing')],
-          ]}
-        />
-        <Question
-          label={t('paidQ')}
-          value={paymentClaim}
-          onChange={setPaymentClaim}
-          options={[
-            ['paid', t('yesPaid')],
-            ['unpaid', t('notPaid')],
-          ]}
-        />
-        <button className="w-big w-big-blue w-big-short" onClick={send}>
-          <span className="w-big-text">{t('send')}</span>
-        </button>
-        <button className="w-btn w-btn-plain" onClick={() => reset()}>
-          <Icon name="redo" /> {t('recordAgain')}
+      <section className="w-sending" role="status">
+        <div className="w-sending-text">{t('sendingIn', { n: Math.max(countdown, 0) })}</div>
+        <button className="w-btn w-btn-plain" onClick={cancel} disabled={countdown <= 0}>
+          <Icon name="x" /> {t('cancelSend')}
         </button>
       </section>
     )
@@ -207,15 +217,20 @@ function VoiceBlock({ onSend }: { onSend: (r: NewReport) => void }) {
 
   return (
     <>
-      {sent && (
+      {notice === 'sent' && (
         <div className="w-sent" role="status">
           <Icon name="check" size={28} /> {navigator.onLine ? t('updateSent') : t('savedOnPhone')}
         </div>
       )}
-      <button className="w-big w-big-blue" onClick={start}>
+      {notice === 'tooShort' && (
+        <div className="w-error" role="alert">
+          <Icon name="alert" /> {t('tooShort')}
+        </div>
+      )}
+      <button className="w-big w-big-blue" onClick={begin}>
         <span className="w-big-icon"><Icon name="mic" size={44} /></span>
         <span className="w-big-text">{t('sendWorkUpdate')}</span>
-        <span className="w-big-sub">{t('tapAndSpeak')}</span>
+        <span className="w-big-sub">{t('reportHint')}</span>
       </button>
       {state.kind === 'error' && (
         <div className="w-error" role="alert">
@@ -226,25 +241,21 @@ function VoiceBlock({ onSend }: { onSend: (r: NewReport) => void }) {
   )
 }
 
-function Question<V extends string>({ label, value, onChange, options }: {
-  label: string
-  value: V | null
-  onChange: (v: V | null) => void
-  options: [V, string][]
-}) {
+function SentList({ reports }: { reports: SentReport[] }) {
   const { t } = useLang()
+  if (reports.length === 0) return null
   return (
-    <fieldset className="w-q">
-      <legend>
-        {label} <span className="w-optional">({t('optional')})</span>
-      </legend>
-      <div className="w-q-row">
-        {options.map(([v, text]) => (
-          <button key={v} type="button" className={`w-chip ${value === v ? 'on' : ''}`} aria-pressed={value === v} onClick={() => onChange(value === v ? null : v)}>
-            {value === v && <Icon name="check" size={20} />} {text}
-          </button>
+    <section className="w-sentlist">
+      <div className="w-label">{t('updatesToday', { n: reports.length })}</div>
+      <ul>
+        {reports.map((r) => (
+          <li key={r.id}>
+            <Icon name={r.pending ? 'cloudOff' : 'check'} size={20} />
+            <span>{fmtTime(r.deviceTime)}</span>
+            <span className={r.pending ? 'w-wait' : 'w-ok'}>{r.pending ? t('reportWaiting') : t('reportReached')}</span>
+          </li>
         ))}
-      </div>
-    </fieldset>
+      </ul>
+    </section>
   )
 }

@@ -8,13 +8,14 @@ export function useNames() {
     workerName(id: string) {
       const w = store.workers.find((x) => x.id === id)
       if (!w) return '?'
-      return lang === 'hi' ? w.nameHi : w.name
+      return lang === 'hi' && w.nameHi ? w.nameHi : w.name
     },
     workerTrade(id: string) {
       const w = store.workers.find((x) => x.id === id)
       return w ? tx(tradeNames[w.trade]) : ''
     },
-    siteName(id: string) {
+    siteName(id: string | null | undefined) {
+      if (!id) return '—'
       const s = store.sites.find((x) => x.id === id)
       return s ? tx(s.name) : '?'
     },

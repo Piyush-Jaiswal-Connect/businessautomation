@@ -17,6 +17,7 @@ export type PayState = 'pay_none' | 'pay_partial' | 'pay_full'
 export function payState(job: Job, payments: Payment[]): PayState {
   const paid = paidFor(job.id, payments)
   if (paid <= 0) return 'pay_none'
+  if (job.agreedCharge <= 0) return 'pay_partial' // agreed amount not entered yet: never call it "fully paid"
   return paid >= job.agreedCharge ? 'pay_full' : 'pay_partial'
 }
 

@@ -68,7 +68,9 @@ Goal: good Hindi/Hinglish accuracy at ₹0, staying on the free **Spark** plan.
   Firestore** (`reportAudio/{reportId}`, max ~3 min ≈ 0.5 MB, below Firestore's 1 MiB document limit), separate from the
   report text so lists stay fast. Free Firestore storage (1 GiB) holds a few thousand messages; old recordings can be
   auto-deleted after a set number of days (text stays).
-- **Model:** a current free-tier Flash model (e.g. `gemini-3.8-flash`, fallback a Flash-Lite model); kept in one setting.
+- **Model (tested 2026-10-25 with Hindi test messages):** `gemini-3.6-flash` (~6–11 s, accurate), fallback
+  `gemini-3.5-flash-lite` (~3 s). `gemini-3.8-flash` did not answer within 3 min; `gemini-2.5-flash` is retired.
+  60-second limit per call; on any failure the next model is tried; failed reports show "Try again".
 - **Still needs Blaze later:** owner **push notifications** (Phase 4) need a server function to send them.
   Expected cost ₹0 within free limits, but Google requires a card on file.
 
@@ -132,8 +134,10 @@ So sensitive data sits in separate owner-only collections.
 | `config/settings` | `askLocation` | any signed-in user | owner |
 | `admins/{uid}` | extra owners/admins | owner | owner |
 | `workerPrivate/{workerId}` | wages (later) | owner only | owner |
-| `reports/{reportId}` | voice report (Phase 3) | that worker, owner | worker: create only; owner: review |
-| `jobs/{jobId}`, `payments/{id}` | customer money (Phase 3) | owner only | owner (payments append-only) |
+| `reports/{reportId}` | worker, phone, device + server time, length, location, status; then `ai` (transcript, translation, site, work, status, payment, amount, next step, confidence), review/edit/payment links | the sending phone, owner | phone: create once (with its recording in the same batch); owner: AI results, corrections, review — never the worker's own times/location |
+| `reportAudio/{reportId}` | the recording (≤ 900 KB) | owner only | phone: create with its report; owner: delete after 90 days |
+| `jobs/{siteId}` | customer, description, agreed charge, work status, follow-up date, notes | owner only | owner, **with an audit entry in the same batch** |
+| `payments/{id}` | site, amount (negative = reversal), date, evidence, report link | owner only | owner, create only, **with audit entry**; never edited or deleted |
 
 Anything not listed is closed to everyone.
 

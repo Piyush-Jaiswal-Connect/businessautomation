@@ -4,7 +4,7 @@ import { after, before, beforeEach, describe, test } from 'node:test'
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import {
-  Timestamp, collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch,
+  Bytes, Timestamp, collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore'
 
 const OWNER_EMAIL = 'munnajaswal22@gmail.com'
@@ -241,5 +241,104 @@ describe('lost phone', () => {
     await assertSucceeds(claimBatch(phone('phoneA2'), 'phoneA2', '5555555555', 'wA'))
     await assertFails(getDoc(doc(phone('phoneA'), 'workers/wA')))
     await assertSucceeds(getDoc(doc(phone('phoneA2'), 'workers/wA')))
+  })
+})
+
+describe('started-work attendance', () => {
+  test('worker may check in without a site', async () => {
+    await pairA()
+    await assertSucceeds(setDoc(doc(phone('phoneA'), `attendance/wA_${today()}`), checkInData('wA', null)))
+  })
+})
+
+function reportBatch(db, uid, id, workerId, { audioBytes = 1000, withAudio = true, extra = {} } = {}) {
+  const b = writeBatch(db)
+  b.set(doc(db, `reports/${id}`), {
+    workerId, deviceUid: uid, deviceTime: Timestamp.now(), serverTime: serverTimestamp(),
+    durationSec: 12, mimeType: 'audio/webm;codecs=opus', location: { lat: 19.12, lng: 73.0, accuracy: 20 }, status: 'new', ...extra,
+  })
+  if (withAudio) {
+    b.set(doc(db, `reportAudio/${id}`), {
+      workerId, deviceUid: uid, audio: Bytes.fromUint8Array(new Uint8Array(audioBytes)), mimeType: 'audio/webm', createdAt: serverTimestamp(),
+    })
+  }
+  return b.commit()
+}
+
+describe('voice reports', () => {
+  test('paired worker sends a report with its recording', async () => {
+    await pairA()
+    await assertSucceeds(reportBatch(phone('phoneA'), 'phoneA', 'r1', 'wA'))
+    await assertSucceeds(getDocs(query(collection(phone('phoneA'), 'reports'), where('deviceUid', '==', 'phoneA'))))
+  })
+  test('a report without its recording, or a too-big recording, is refused', async () => {
+    await pairA()
+    await assertFails(reportBatch(phone('phoneA'), 'phoneA', 'r2', 'wA', { withAudio: false }))
+    await assertFails(reportBatch(phone('phoneA'), 'phoneA', 'r3', 'wA', { audioBytes: 950 * 1024 }))
+  })
+  test('cannot send as another worker or pretend the AI already ran', async () => {
+    await pairA()
+    await assertFails(reportBatch(phone('phoneA'), 'phoneA', 'r4', 'wB'))
+    await assertFails(reportBatch(phone('phoneA'), 'phoneA', 'r5', 'wA', { extra: { status: 'processed' } }))
+  })
+  test('unpaired phone cannot send', async () => {
+    await assertFails(reportBatch(phone('stranger'), 'stranger', 'r6', 'wA'))
+  })
+  test('worker cannot read recordings, other phones\' reports, or change a report', async () => {
+    await pairA()
+    await assertSucceeds(reportBatch(phone('phoneA'), 'phoneA', 'r7', 'wA'))
+    await assertFails(getDoc(doc(phone('phoneA'), 'reportAudio/r7')))
+    await assertFails(getDocs(collection(phone('phoneA'), 'reports')))
+    await assertFails(getDoc(doc(phone('other'), 'reports/r7')))
+    await assertFails(updateDoc(doc(phone('phoneA'), 'reports/r7'), { status: 'processed' }))
+  })
+  test('owner reads the recording and saves AI results, but cannot change what the worker sent', async () => {
+    await pairA()
+    await assertSucceeds(reportBatch(phone('phoneA'), 'phoneA', 'r8', 'wA'))
+    const db = owner()
+    await assertSucceeds(getDoc(doc(db, 'reportAudio/r8')))
+    await assertSucceeds(updateDoc(doc(db, 'reports/r8'), { status: 'processed', ai: { transcript: 'काम पूरा' } }))
+    await assertFails(updateDoc(doc(db, 'reports/r8'), { deviceTime: Timestamp.fromMillis(0) }))
+    await assertFails(updateDoc(doc(db, 'reportAudio/r8'), { mimeType: 'x' }))
+  })
+})
+
+function jobBatch(db, siteId, auditId, agreed = 50000) {
+  const b = writeBatch(db)
+  b.set(doc(db, `auditLog/${auditId}`), { at: serverTimestamp(), by: 'owner1', byEmail: OWNER_EMAIL, target: `jobs/${siteId}`, action: 'job_saved', note: null, before: null, after: agreed })
+  b.set(doc(db, `jobs/${siteId}`), {
+    customer: 'Mr. Patil', description: 'Bathroom', agreedCharge: agreed, workStatus: 'in_progress',
+    followUpDate: null, notes: '', updatedAt: serverTimestamp(), lastAuditId: auditId,
+  })
+  return b.commit()
+}
+
+function paymentBatch(db, id, auditId, amount = 5000) {
+  const b = writeBatch(db)
+  b.set(doc(db, `auditLog/${auditId}`), { at: serverTimestamp(), by: 'owner1', byEmail: OWNER_EMAIL, target: `payments/${id}`, action: 'payment_verified', note: 'UPI', before: null, after: amount })
+  b.set(doc(db, `payments/${id}`), {
+    jobId: 's1', amount, date: Timestamp.now(), evidence: 'UPI ref 123', reportId: null,
+    verifiedBy: 'owner1', createdAt: serverTimestamp(), lastAuditId: auditId,
+  })
+  return b.commit()
+}
+
+describe('customer money', () => {
+  test('owner saves a job and a verified payment only with audit entries', async () => {
+    const db = owner()
+    await assertFails(setDoc(doc(db, 'jobs/s1'), {
+      customer: 'x', description: '', agreedCharge: 1, workStatus: 'in_progress', followUpDate: null, notes: '', updatedAt: serverTimestamp(), lastAuditId: 'none',
+    }))
+    await assertSucceeds(jobBatch(db, 's1', 'j1'))
+    await assertSucceeds(paymentBatch(db, 'p1', 'pa1'))
+    await assertFails(updateDoc(doc(db, 'payments/p1'), { amount: 1 }))
+    await assertSucceeds(paymentBatch(db, 'p2', 'pa2', -5000)) // reversal of a mistake
+  })
+  test('workers can never read money records', async () => {
+    await pairA()
+    await assertSucceeds(jobBatch(owner(), 's1', 'j2'))
+    await assertFails(getDoc(doc(phone('phoneA'), 'jobs/s1')))
+    await assertFails(getDocs(collection(phone('phoneA'), 'payments')))
+    await assertFails(jobBatch(phone('phoneA'), 's1', 'j3'))
   })
 })

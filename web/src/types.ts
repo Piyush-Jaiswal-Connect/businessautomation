@@ -68,7 +68,7 @@ export interface GeoPoint {
 export interface Attendance {
   id: string // workerId_date — one per worker per day
   workerId: string
-  siteId: string
+  siteId: string | null // only if the owner had assigned a site ("started work")
   date: string
   deviceTime: number // when the worker tapped, phone clock
   serverTime: number | null // when the server received it (null until it has)
@@ -80,45 +80,68 @@ export interface Attendance {
   history: AuditEntry[]
 }
 
-export type WorkClaim = 'completed' | 'in_progress' | null
-export type PaymentClaim = 'paid' | 'unpaid' | null
+// ---------- voice reports ----------
+
+export type WorkSaid = 'completed' | 'in_progress' | 'problem' | 'not_mentioned'
+export type PaymentSaid = 'paid' | 'partial' | 'unpaid' | 'not_mentioned'
+export type Confidence = 'high' | 'low'
+
+/** What the AI understood from a voice message. Only what the worker said; the owner can correct it. */
+export interface ReportAi {
+  transcript: string // exact words (Hindi in Devanagari, English in Latin)
+  translationEn: string
+  siteId: string | null // matched to a known site, or null
+  placeText: string // the place as the worker said it
+  workEn: string
+  workHi: string
+  workStatus: WorkSaid
+  paymentStatus: PaymentSaid
+  amount: number | null // rupees the worker says were received
+  followUpEn: string
+  followUpHi: string
+  confidence: { site: Confidence; work: Confidence; payment: Confidence }
+  audioQuality: 'clear' | 'noisy' | 'silent'
+}
+
+/** new → processing → processed (or failed, retried by the owner) */
+export type ReportStatus = 'new' | 'processing' | 'processed' | 'failed'
 
 export interface Report {
   id: string
   workerId: string
-  siteId: string
-  jobId: string
   deviceTime: number
   serverTime: number | null
-  syncStatus: SyncStatus
   durationSec: number
-  audioUrl: string | null
-  workClaim: WorkClaim
-  paymentClaim: PaymentClaim
+  location: GeoPoint | null
+  status: ReportStatus
+  processingAt: number | null
+  ai: ReportAi | null
+  aiError: string | null
+  edited: boolean // owner corrected the AI result
   reviewed: boolean
+  paymentId: string | null // the verified payment made from this report
+  audioDeleted: boolean
 }
 
 export type WorkStatus = 'in_progress' | 'worker_completed' | 'owner_approved'
 
-/** Owner-only: contains money. */
+/** Owner-only: one money record per site (id = siteId). Workers can never read it. */
 export interface Job {
   id: string
-  siteId: string
   customer: string
-  description: Text
+  description: string
   agreedCharge: number
   workStatus: WorkStatus
-  paymentReported: PaymentClaim // what a worker said; never counts as money received
   followUpDate: string | null
   notes: string
-  history: AuditEntry[]
 }
 
-/** Owner-only, append-only: a payment the owner has checked. */
+/** Owner-only, append-only: money the owner has checked. A mistake is fixed with a negative reversal. */
 export interface Payment {
   id: string
   jobId: string
   amount: number
   date: number
   evidence: string
+  reportId: string | null
 }

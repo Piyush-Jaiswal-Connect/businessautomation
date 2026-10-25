@@ -1,21 +1,29 @@
-// A paired worker phone's view: only its own worker record, site, work and today's attendance.
-import { Timestamp, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+// A paired worker phone's view: only its own worker record, site, work, today's attendance and voice reports.
+import {
+  Bytes, Timestamp, collection, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
+} from 'firebase/firestore'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { auth, db } from '../lib/firebase'
-import { dayKey } from '../lib/format'
+import { at, dayKey } from '../lib/format'
 import { useOnline } from '../lib/hooks'
 import type { Assignment, Attendance, GeoPoint, Settings, Site, Worker } from '../types'
 import { errorText, ms, toAssignment, toAttendance, toSite, toWorker } from './convert'
 
 export type WorkerPhase = 'loading' | 'unpaired' | 'removed' | 'ready'
 
-function getLocation(): Promise<GeoPoint | null> {
+export interface SentReport {
+  id: string
+  deviceTime: number
+  pending: boolean // still waiting on the phone for network
+}
+
+export function getLocation(): Promise<GeoPoint | null> {
   if (!('geolocation' in navigator)) return Promise.resolve(null)
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: Math.round(p.coords.accuracy) }),
-      () => resolve(null), // refused or failed: attendance still goes through without it
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+      () => resolve(null), // refused or failed: the attendance / report still goes through without it
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 60_000 },
     )
   })
 }
@@ -37,6 +45,7 @@ function useWorkerStoreValue() {
   const [snapAttendance, setSnapAttendance] = useState<{ doc: Attendance | null; pending: boolean }>({ doc: null, pending: false })
   const [settings, setSettings] = useState<Settings>({ askLocation: false })
   const [locating, setLocating] = useState(false)
+  const [sentToday, setSentToday] = useState<SentReport[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -92,6 +101,23 @@ function useWorkerStoreValue() {
     )
   }, [linkKey, today])
 
+  // This phone's voice reports from today (and whether each has reached the server yet).
+  useEffect(
+    () =>
+      onSnapshot(
+        query(collection(db, 'reports'), where('deviceUid', '==', uid), where('deviceTime', '>=', Timestamp.fromMillis(at(today, '00:00')))),
+        { includeMetadataChanges: true },
+        (s) =>
+          setSentToday(
+            s.docs
+              .map((d) => ({ id: d.id, deviceTime: ms(d.data().deviceTime) ?? 0, pending: d.metadata.hasPendingWrites }))
+              .sort((a, b) => b.deviceTime - a.deviceTime),
+          ),
+        () => setSentToday([]),
+      ),
+    [uid, today],
+  )
+
   // Not "received" until the server has it: while a write waits on this phone, say so.
   const attendance = useMemo<Attendance | null>(() => {
     const a = snapAttendance.doc
@@ -111,7 +137,8 @@ function useWorkerStoreValue() {
 
   const actions = useMemo(
     () => ({
-      async checkIn(wid: string, siteIdNow: string, askLocation: boolean) {
+      /** "Started work". The site is recorded only if the owner assigned one. */
+      async checkIn(wid: string, siteIdNow: string | null, askLocation: boolean) {
         setError(null)
         let location: GeoPoint | null = null
         if (askLocation) {
@@ -128,6 +155,25 @@ function useWorkerStoreValue() {
           correctedTime: null, correctionReason: null, decidedBy: null, decidedAt: null, lastAuditId: null,
         }).catch((e) => setError(errorText(e)))
       },
+      /**
+       * Voice report: the text record and the recording go in one batch. Not awaited: without
+       * network both wait on the phone (they survive closing the app) and are sent later.
+       */
+      async sendReport(wid: string, r: { blob: Blob; durationSec: number; location: GeoPoint | null }) {
+        setError(null)
+        const ref = doc(collection(db, 'reports'))
+        const audio = Bytes.fromUint8Array(new Uint8Array(await r.blob.arrayBuffer()))
+        const b = writeBatch(db)
+        b.set(ref, {
+          workerId: wid, deviceUid: uid, deviceTime: Timestamp.now(), serverTime: serverTimestamp(),
+          durationSec: Math.max(1, Math.min(240, Math.round(r.durationSec))), mimeType: r.blob.type || 'audio/webm',
+          location: r.location, status: 'new',
+        })
+        b.set(doc(db, 'reportAudio', ref.id), {
+          workerId: wid, deviceUid: uid, audio, mimeType: r.blob.type || 'audio/webm', createdAt: serverTimestamp(),
+        })
+        b.commit().catch((e) => setError(errorText(e)))
+      },
       checkOut(attendanceId: string) {
         setError(null)
         updateDoc(doc(db, 'attendance', attendanceId), {
@@ -135,10 +181,10 @@ function useWorkerStoreValue() {
         }).catch((e) => setError(errorText(e)))
       },
     }),
-    [],
+    [uid],
   )
 
-  return { phase, today, workerId, worker, assignment, site: assignment ? site : null, attendance, settings, locating, error, ...actions }
+  return { phase, today, workerId, worker, assignment, site: assignment ? site : null, attendance, settings, locating, error, sentToday, ...actions }
 }
 
 export type WorkerStore = ReturnType<typeof useWorkerStoreValue>

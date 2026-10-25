@@ -37,7 +37,7 @@ export function hhmm(ms: number): string {
 }
 
 export function rupees(n: number): string {
-  return '₹' + Math.round(n).toLocaleString('en-IN')
+  return (n < 0 ? '−₹' : '₹') + Math.abs(Math.round(n)).toLocaleString('en-IN')
 }
 
 export function mmss(sec: number): string {

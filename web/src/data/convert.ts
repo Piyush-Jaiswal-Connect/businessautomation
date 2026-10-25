@@ -1,6 +1,6 @@
 // Turns Firestore documents into the plain records the screens use.
 import type { DocumentData, DocumentSnapshot, QueryDocumentSnapshot } from 'firebase/firestore'
-import type { Assignment, Attendance, AttendanceStatus, Site, Worker } from '../types'
+import type { Assignment, Attendance, AttendanceStatus, Job, Payment, Report, Site, Worker } from '../types'
 
 type Snap = QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>
 
@@ -43,7 +43,7 @@ export function toAttendance(s: Snap, pendingStatus?: AttendanceStatus): Attenda
   return {
     id: s.id,
     workerId: d.workerId,
-    siteId: d.siteId,
+    siteId: d.siteId ?? null,
     date: d.date,
     deviceTime: ms(d.deviceTime) ?? 0,
     serverTime,
@@ -54,6 +54,44 @@ export function toAttendance(s: Snap, pendingStatus?: AttendanceStatus): Attenda
     location: d.location ?? null,
     history: [],
   }
+}
+
+export function toReport(s: Snap): Report {
+  const d = s.data()!
+  return {
+    id: s.id,
+    workerId: d.workerId,
+    deviceTime: ms(d.deviceTime) ?? 0,
+    serverTime: ms(d.serverTime),
+    durationSec: d.durationSec ?? 0,
+    location: d.location ?? null,
+    status: d.status ?? 'new',
+    processingAt: ms(d.processingAt),
+    ai: d.ai ?? null,
+    aiError: d.aiError ?? null,
+    edited: d.edited === true,
+    reviewed: d.reviewed === true,
+    paymentId: d.paymentId ?? null,
+    audioDeleted: d.audioDeleted === true,
+  }
+}
+
+export function toJob(s: Snap): Job {
+  const d = s.data()!
+  return {
+    id: s.id,
+    customer: d.customer ?? '',
+    description: d.description ?? '',
+    agreedCharge: d.agreedCharge ?? 0,
+    workStatus: d.workStatus ?? 'in_progress',
+    followUpDate: d.followUpDate ?? null,
+    notes: d.notes ?? '',
+  }
+}
+
+export function toPayment(s: Snap): Payment {
+  const d = s.data()!
+  return { id: s.id, jobId: d.jobId, amount: d.amount, date: ms(d.date) ?? 0, evidence: d.evidence, reportId: d.reportId ?? null }
 }
 
 export function errorText(e: unknown): string {

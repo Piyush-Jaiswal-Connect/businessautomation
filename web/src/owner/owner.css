@@ -697,3 +697,78 @@
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
 }
+
+/* voice report cards */
+.o-report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--o-card-2);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.o-report-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.o-report-row > svg {
+  color: var(--o-muted);
+  flex: none;
+}
+
+.o-transcript {
+  margin: 6px 0 0;
+  color: var(--o-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.o-wrap {
+  flex-wrap: wrap;
+}
+
+.o-select {
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--o-line);
+  background: var(--o-bg);
+  color-scheme: dark;
+  max-width: 100%;
+}
+
+.o-play {
+  align-self: flex-start;
+}
+
+.o-h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.o-top {
+  margin-top: 10px;
+}
+
+.o-pay-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.o-btn-small {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.o-grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
