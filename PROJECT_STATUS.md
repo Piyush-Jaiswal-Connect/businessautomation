@@ -73,40 +73,46 @@ Phase 2 (P2):
 - Test database data is wiped when the test database window is closed.
 
 ## EXTERNAL SERVICES REQUIRED:
-- Phase 2/3 real use: Firebase project `site-control` — Authentication (Google + Anonymous) and Firestore. **Free (Spark) plan is enough.**
-- Phase 3: Cloud Storage for voice → Blaze plan. Phase 4: Hosting (free) + Cloud Functions for push → Blaze.
+- Firebase project **`businessautomation-2884f`** (alias `prod`), free **Spark** plan: Authentication (Google + Anonymous),
+  Firestore, Hosting (Phase 4), **Firebase AI Logic → Gemini Developer API (free tier)** for voice-to-text.
+- Phase 4 only: Blaze plan (card) for push notifications via a Cloud Function (expected ₹0).
 
 ## COST/BILLING CONSIDERATIONS:
-- Phase 2 adds no cost (no server code, no SMS). Firestore free daily limits are far above expected use.
-- Blaze (card) needed from Phase 3; budget alert **₹500/month**. Expected ₹0–20/month for Firebase **plus ₹50–250/month for Gemini AI**
-  (owner approved paid AI on 2026-10-25; exact prices to be checked and shown before it is switched on).
+- Phases 2–3: **₹0** — Spark plan, Gemini free tier, recordings stored in Firestore (1 GiB free).
+- Gemini free tier: requests per day are capped (far above ~50 messages/day) and **Google may use free-tier data to improve
+  its products; human reviewers may listen/read**. Paid tier later = link billing, no code change.
+- Phase 4: Blaze needed only for push notifications; set a budget alert then.
 
 ## DECISIONS 2026-10-25 (after P2, before Phase 3):
 - App renamed **Ayush Enterprises** (icon label "Ayush"). Done in app + docs (internal IDs unchanged).
 - Phase 3 now = **voice reports with AI**: tap mic → speak → stop sends automatically → Gemini makes transcript,
   English translation and fields (site, work, status, payment + amount, follow-up, confidence) → owner dashboard cards,
-  unpaid/follow-up list, per-site history; owner can correct any field and verifies money. See ARCHITECTURE.md §1b–1c.
+  unpaid/follow-up list, per-site history; owner can correct any field and verifies money. See ARCHITECTURE.md §1b–1d.
 - Attendance becomes "started work" only (no site needed at check-in).
 - Location saved with each voice report (at that moment only; workers told in the privacy notice).
-- Paid Gemini approved; bill alert ₹500/month.
+- ~~Paid Gemini~~ → owner chose a **free** option for now: Gemini free tier via Firebase AI Logic, run from the owner's
+  dashboard; recordings stored in Firestore (ARCHITECTURE.md §1d).
+- Real Firebase config received and connected (`web/src/firebase-config.ts`, `.firebaserc` alias `prod`). `npm run dev`
+  still uses the local test database; only the production build uses the real project.
 
-## MANUAL ACTION REQUIRED:
-- Owner says the console steps (Google + Anonymous sign-in, Firestore in asia-south1, web app registered) are **done** (2026-10-25).
-- **Still needed:** paste the `firebaseConfig` block and the **Project ID** in chat (the last message arrived empty),
-  and name any other Gmail that should be an owner/admin.
-- Before AI goes live (Phase 3): switch the project to **Blaze** (card) and set a **₹500/month budget alert**
-  (Google Cloud console → Billing → Budgets & alerts). I will guide step by step.
-- After the config arrives: approve a one-time `firebase login` in the browser so the security rules can be uploaded.
+## MANUAL ACTION REQUIRED (owner):
+1. **One-time `firebase login`** on this PC (approve in the browser) so I can upload the security rules.
+2. Firebase console → **Build → AI Logic → Get started** → choose **Gemini Developer API** → enable. Do **not** link a
+   billing account (that keeps it free).
+3. Confirm which Google account(s) will sign in as **owner** (rules currently allow only munnajaswal22@gmail.com).
+4. Confirm Firestore location chosen (expected asia-south1 Mumbai) — I can also read it after login.
+5. For Phase 3 testing: an Android phone with Chrome (worker side), and you signing in yourself (I never type your password).
+6. Phase 4 only: Blaze plan + budget alert for push notifications.
 
 ## NEXT EXACT ACTION:
-Waiting for owner's "Start Phase 3" + config. Then, in order:
-1. Connect real project: config into `web/src/firebase-config.ts`, project into `.firebaserc`, `npx firebase login`,
-   deploy `firebase/firestore.rules`, smoke-test sign-in/pairing/attendance on the real project.
+Waiting for owner's "Start Phase 3". Then, in order:
+1. After `firebase login`: deploy `firebase/firestore.rules` to `prod`; owner signs in on the real project; smoke-test
+   pairing + attendance with a real phone (via this PC's local network is not https — real phone test may wait for Phase 4 hosting).
 2. Attendance → "started work" (site optional), update rules + tests.
 3. Voice report: one-tap record → stop auto-sends (cancel window), offline queue (IndexedDB), location at send,
-   upload to Cloud Storage (owner + that worker only), `reports` docs + rules + tests.
-4. Cloud Function (asia-south1) on upload → Gemini: transcript, translation, fields, confidence (emulator-tested
-   with a stub first; real Gemini only after showing exact prices and Blaze is on).
-5. Owner dashboard: report cards with player, ⚠ uncertain fields, edit, unpaid/follow-up list, per-site history;
-   jobs/payments with owner-verified money and audit log.
+   audio into Firestore `reportAudio/{id}` (≤ ~0.5 MB), `reports` docs + rules + tests.
+4. Owner dashboard processing: new reports → convert to 16 kHz WAV → Gemini (Firebase AI Logic, free tier) with site list →
+   transcript, translation, fields, confidence → saved to report (test with a stub in the emulator, then real AI).
+5. Owner report cards with player, ⚠ uncertain fields, edit, unpaid/follow-up list, per-site history;
+   jobs/payments with owner-verified money and audit log. Update worker privacy notice (Google AI processing).
 6. Test with two sessions; update docs; checkpoint P3; stop.

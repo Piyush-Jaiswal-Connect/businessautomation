@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-site-control"
+    "default": "demo-site-control",
+    "prod": "businessautomation-2884f"
   }
 }

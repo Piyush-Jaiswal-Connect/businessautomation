@@ -16,8 +16,9 @@ Last updated: 2026-10-25 (Phase 0)
 - **Name:** everything the user sees says **Ayush Enterprises** (Hindi: आयुष एंटरप्राइज़ेज़); label under the
   phone icon is **"Ayush"**. Internal IDs (Firebase project, folders) keep "site-control"; nobody sees them.
 - **Voice reports are the core feature, with AI** (moved from optional Phase 6 into Phase 3).
-  Owner approved Google's **paid Gemini AI** (estimate ₹50–250/month; exact prices to be checked before switching on;
-  bill alert raised to **₹500/month**).
+  ~~Paid Gemini~~ → **changed the same day: use a FREE option for now, with good accuracy** (see §1d).
+- **Real Firebase project:** `businessautomation-2884f` (alias `prod` in `.firebaserc`). Web config in
+  `web/src/firebase-config.ts` (Google Analytics left out).
 - **Attendance = "started work" only.** Workers move between sites during the day; the sites they visit come from
   their voice reports. If the owner did assign a site, the worker still sees it.
 - **Location is saved with each voice report** (only at that moment, never tracked all day; workers are told).
@@ -28,7 +29,7 @@ Worker: tap mic → speak (Hindi/English/mix) → tap stop → **sends automatic
 Screen hint: "बताइए: कौन सी साइट, क्या काम किया, पैसे मिले या नहीं". No typing, no questions to answer.
 Offline: recording kept on the phone and sent when network returns.
 
-Server (Cloud Function, triggered when the audio upload finishes):
+Processing (see §1d for where this runs while we stay on the free plan):
 1. Gemini receives the audio + the owner's site list + the worker's name.
 2. Returns: exact transcript (original language), English translation, and fields:
    **site** (matched to a known site, or "new place" text), **work done**, **work status**
@@ -41,6 +42,35 @@ Owner dashboard card: worker · time · ▶ play · site · work · status · pa
 transcript + translation · ⚠ "please check" on uncertain fields · edit any field · **Verify payment**
 (worker's word never counts as money until the owner verifies). Lists: today's reports, unpaid/follow-up,
 per-site history. The original recording is always kept.
+
+## 1d. Free voice-to-text plan (decided 2026-10-25, replaces paid Gemini for now)
+
+Goal: good Hindi/Hinglish accuracy at ₹0, staying on the free **Spark** plan.
+
+- **AI:** Google **Gemini** through **Firebase AI Logic**, using the **Gemini Developer API free tier**.
+  Free while the project has no billing account. No API key to copy or protect: Firebase handles it.
+  Chosen over the other free options because one call gives transcript + English translation + fields:
+  - Chrome's built-in speech-to-text: free, but works only live while speaking (clashes with recording the
+    original), gives words only (no site/payment fields), weaker in site noise.
+  - Whisper on this PC: free software, but the PC would have to stay on, and it is slow without a graphics card.
+- **Free-tier conditions (owner must know):** Google may use free-tier inputs/outputs to improve its products and
+  human reviewers may read/listen to them. Requests per minute/day are capped (exact numbers are per project in
+  AI Studio; our ~50 messages/day should be far below). Google can change the free tier at any time.
+  Switching to the paid tier later = linking a billing account; no code change.
+  The worker privacy notice will say voice messages are processed by Google's AI.
+- **Where the AI call runs:** on the **owner's dashboard** (owner's phone/PC). When the owner app is open it picks up new
+  voice reports, sends each to Gemini, and saves the result. Workers' phones never call the AI, so a worker cannot alter
+  the result. Reports show "text coming" until the owner app has processed them. (A server function would do this
+  without the owner app open, but needs the Blaze card plan.)
+- **Audio format:** phones record Opus/WebM (small). Before sending to Gemini, the owner app converts to 16 kHz mono WAV
+  (a format Gemini officially accepts).
+- **Where recordings are kept:** Firebase Cloud Storage now requires the Blaze plan, so recordings are stored **inside
+  Firestore** (`reportAudio/{reportId}`, max ~3 min ≈ 0.5 MB, below Firestore's 1 MiB document limit), separate from the
+  report text so lists stay fast. Free Firestore storage (1 GiB) holds a few thousand messages; old recordings can be
+  auto-deleted after a set number of days (text stays).
+- **Model:** a current free-tier Flash model (e.g. `gemini-3.8-flash`, fallback a Flash-Lite model); kept in one setting.
+- **Still needs Blaze later:** owner **push notifications** (Phase 4) need a server function to send them.
+  Expected cost ₹0 within free limits, but Google requires a card on file.
 
 ## 2. Stack (chosen for low cost and low maintenance)
 
@@ -56,7 +86,7 @@ per-site history. The original recording is always kept.
 | Hosting | **Firebase Hosting** | Free HTTPS; same project as everything else. |
 | Local testing | **Firebase Emulator Suite** (via `npx firebase-tools`) | Test rules and functions without touching real data. |
 | Owner widget (Phase 5) | **Kotlin + Jetpack Glance** Android app | A real home-screen widget; same Firebase backend. |
-| Voice → text + fields (Phase 3) | **Google Gemini** (paid tier, called from a Cloud Function) | Understands Hindi/Hinglish audio; transcript, translation and fields in one step; same Google billing; paid tier does not train on our data. Owner approved 2026-10-25. |
+| Voice → text + fields (Phase 3) | **Google Gemini, free tier, via Firebase AI Logic**, called from the owner's dashboard | Understands Hindi/Hinglish audio; transcript, translation and fields in one step; ₹0 on Spark. Free tier: Google may use the data (§1d). |
 
 Not used on purpose: separate servers, paid databases, SMS OTP (costs per message), payment gateways, billing/quotation modules.
 
@@ -172,17 +202,16 @@ site-control/
 | Service | Free allowance (approx.) | Our expected use | Expected cost |
 |---|---|---|---|
 | Firestore | 50k reads, 20k writes per day; 1 GiB stored | a few thousand reads/day | ₹0 |
-| Authentication (custom token + Google) | free | ~30 users | ₹0 |
-| Cloud Functions | 2 million calls/month | a few thousand/month | ₹0 |
-| Cloud Storage (voice) | 5 GB stored, 1 GB/day download *in US regions only* | ~0.5 MB per minute of voice; ~0.5 GB/month | ₹0–20/month |
+| Authentication (Google + anonymous phones) | free | ~30 users | ₹0 |
+| Cloud Functions (Phase 4, push only) | 2 million calls/month (needs Blaze) | a few thousand/month | ₹0 |
 | FCM push | free | — | ₹0 |
-| Gemini AI (voice reports) | paid per use | ~15 workers × 2–3 short messages/day | **₹50–250/month (estimate, to be checked)** |
+| Gemini AI (voice reports) | free tier (capped requests/day) | ~15 workers × 2–3 short messages/day | **₹0** (paid tier later only if needed) |
+| Voice recordings | stored in Firestore (1 GiB free) | ~0.2–0.5 MB per message | ₹0 |
 | Hosting | 10 GB stored, 360 MB/day | small app | ₹0 |
 
 **Important:** Cloud Storage and Cloud Functions now require the **Blaze (pay-as-you-go)** plan. Blaze still
 includes the free allowances above, but needs a debit/credit card with international payments enabled.
-We will set a **budget alert at ₹500/month** (raised from ₹100 because of the AI) so any unexpected cost is emailed immediately.
-Storage bucket region: `asia-south1` (Mumbai) for speed and keeping data in India; at our size the
-cost is a few rupees per month. (Alternative: `us-central1` to stay fully free — decided at Phase 3.)
+When Blaze is switched on (Phase 4, for push notifications) we will set a **budget alert** so any unexpected cost is emailed immediately.
+Phase 3 stays on the free Spark plan (no Cloud Storage bucket; recordings in Firestore, see §1d).
 
 Prices and limits change; they will be re-checked on the official pricing page before Blaze is turned on.

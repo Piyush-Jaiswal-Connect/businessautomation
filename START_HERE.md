@@ -41,12 +41,14 @@ phone camera once (or types the 10-digit number). The code works once, for 15 mi
 If a phone is lost or a worker leaves, tap **Deactivate** — that phone loses access immediately.
 
 ## Money
-Expected cost: about ₹0–20 per month for the app, plus roughly ₹50–250 per month for the AI that turns voice
-into text (you approved this; I will show exact prices before switching it on). From Phase 3 Google needs a card
-on file; we will set an alert that emails you if the bill ever goes above ₹500.
+Expected cost: **₹0** for now. The voice-to-text uses Google's free AI tier (good Hindi accuracy). The trade-off of
+"free": Google may use those voice messages to improve its products, and request numbers per day are capped (far above
+what you need). Later, only phone notifications (Phase 4) need a card on file with Google; expected cost still ₹0.
 
 ## What you need to do now
-1. Paste the **firebaseConfig** block and the **Project ID** in chat (Firebase console → gear icon → Project settings →
-   Your apps → your web app → "Config"). Your last message arrived without them.
-2. Tell me if any other Gmail should be an owner.
-3. When ready, tell me: **"Start Phase 3"**.
+1. **Approve a one-time Firebase login on this PC** (I start it; you click "Allow" in the browser with the Google
+   account that owns the Firebase project). This lets me upload the security rules.
+2. **Turn on the free AI:** console.firebase.google.com → your project → **Build → AI Logic → Get started** →
+   choose **Gemini Developer API** → enable. Do **not** add a billing account.
+3. **Tell me who signs in as owner** — right now only munnajaswal22@gmail.com is allowed. Add family members if needed.
+4. When ready, tell me: **"Start Phase 3"**.
