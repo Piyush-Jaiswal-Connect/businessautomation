@@ -20,7 +20,7 @@ Last updated: 2026-10-25 (Phase 0)
 | Login | **Firebase Authentication** | Free for our scale; handles sessions and token refresh. |
 | Database | **Cloud Firestore**, region `asia-south1` (Mumbai) | Real-time updates, offline queue built in, security rules. |
 | Voice files | **Cloud Storage for Firebase** | Private files, readable only through security rules. |
-| Server logic | **Cloud Functions (2nd gen)**, region `asia-south1` | Pairing codes, notifications, audit log, owner-only actions. |
+| Server logic | **Cloud Functions (2nd gen)**, region `asia-south1` — only from Phase 4 | Push notifications. (Login and pairing need no server code; see §3.) |
 | Push notifications | **Firebase Cloud Messaging (FCM)** web push | Free; works for installed PWAs on Android Chrome. |
 | Hosting | **Firebase Hosting** | Free HTTPS; same project as everything else. |
 | Local testing | **Firebase Emulator Suite** (via `npx firebase-tools`) | Test rules and functions without touching real data. |
@@ -29,24 +29,30 @@ Last updated: 2026-10-25 (Phase 0)
 
 Not used on purpose: separate servers, paid databases, SMS OTP (costs per message), payment gateways, billing/quotation modules.
 
-## 3. Login design
+## 3. Login design (built in Phase 2)
+
+Chosen so that login needs **no server code and no paid plan**: every check is done by the
+Firestore security rules (`firebase/firestore.rules`), which are tested by `npm run test:rules`.
 
 ### Owner / admin
-- Signs in with **Google Sign-In** (their own Gmail). No new password.
-- Role is stored as a Firebase **custom claim** (`role: "owner"` or `"admin"`), set once by a setup script
-  for an allow-listed email. Security rules trust only this claim, never a value the app sends.
+- Signs in with **Google Sign-In** (their own Gmail), using the redirect method (works inside the installed app).
+- Owner = a Google account whose **verified** email is listed in `ownerEmails()` in the rules
+  (currently munnajaswal22@gmail.com), or anyone with an `admins/{uid}` record created by an owner.
+  To add another owner, add the email there and redeploy the rules.
 
 ### Worker (no email, no password)
-1. Owner adds the worker in the dashboard (name, trade, phone, site).
-2. Owner taps **"Pair phone"** → a Cloud Function creates a **one-time 6-digit code + QR**, valid 15 minutes,
-   stored only as a hash.
-3. On the worker's phone, open Site Control → scan the QR (or type the 6 digits).
-4. Cloud Function checks the code (single use, rate-limited, expiry), then returns a Firebase **custom token**
-   for that worker. The app signs in with it.
-5. Firebase keeps the session on the phone. The worker never logs in again on that phone unless it is revoked.
-- **Lost phone:** owner taps "Deactivate". The function disables the account, revokes refresh tokens and
-  marks the worker inactive; rules reject that worker's writes immediately.
-- **Optional 4-digit PIN** (off by default): only a screen lock on the device, never the real credential.
+1. Owner adds the worker and sets their site + work (Manage page).
+2. Owner taps **"Connect phone"** → a random **10-digit code + QR** (valid 15 minutes, works once).
+3. Worker scans the QR with the phone camera (opens Site Control) or types the 10 digits, reads the
+   privacy notice and taps "मंज़ूर है — फ़ोन जोड़ो".
+4. The phone gets its own anonymous Firebase login, then in one batch: marks the code used, links
+   itself to the worker (`workers.deviceUid`) and writes `devices/{uid}`. The rules accept this only for a
+   fresh, unused code that belongs to that worker.
+5. Firebase keeps the session on the phone; no daily login.
+- **Lost phone / worker left:** owner taps "Deactivate" → `active=false`, `deviceUid=null`. Every rule checks
+  these on every request, so the old phone is cut off immediately. Connecting a new phone also cuts off the old one.
+- **Optional 4-digit PIN:** not built (not needed while each worker uses their own phone).
+- Brute-forcing a code: 10¹⁰ possibilities, each valid 15 minutes, so guessing is not practical.
 
 ## 4. Data model (Firestore)
 
@@ -55,18 +61,20 @@ So sensitive data sits in separate owner-only collections.
 
 | Collection | Contents | Who can read | Who can write |
 |---|---|---|---|
-| `users/{uid}` | role, name, language, active | self, owner | functions, owner |
-| `workers/{workerId}` | name, trade, phone, active, linked uid | that worker, owner | owner |
-| `workerPrivate/{workerId}` | wage type, daily wage, notes | owner only | owner |
-| `sites/{siteId}` | site name, area, address label, active | assigned workers, owner | owner |
-| `assignments/{date_workerId}` | site, today's job text (no money) | that worker, owner | owner |
-| `attendance/{workerId_YYYY-MM-DD}` | site, device time, **server time**, optional location, status, check-out | that worker, owner | worker: create once / check-out only; owner: approve/reject/correct |
-| `reports/{reportId}` | worker, site, device time, server time, audio path, worker payment claim, transcript (later) | that worker, owner | worker: create only; owner: review |
-| `jobs/{jobId}` | site, work description, agreed charge, received, outstanding, work + payment statuses, follow-up date, notes | owner only | owner |
-| `payments/{paymentId}` | job, amount, date, evidence note, verified by | owner only | owner, append-only |
-| `auditLog/{id}` | who changed what, old → new, reason, time | owner only | Cloud Functions only, append-only |
-| `pairingCodes/{hash}` | worker, expiry, used | nobody (functions only) | functions only |
-| `ownerDevices/{uid}/tokens/{token}` | FCM push tokens | owner | owner |
+| `workers/{workerId}` | name, Hindi name, trade, active, paired phone (`deviceUid`), paired time | that worker's phone, owner | owner; phone only to pair itself with a valid code |
+| `devices/{uid}` | which worker a phone belongs to | that phone, owner | phone, only in the pairing batch |
+| `pairings/{code}` | worker, expiry, used by | phone only while fresh & unused; owner | owner creates (≤30 min); phone marks used |
+| `sites/{siteId}` | name (en/hi), area (en/hi), active | owner; a worker only for their own site | owner (no delete; mark finished) |
+| `assignments/{workerId}` | current site + work text (en/hi), no money | that worker, owner | owner |
+| `attendance/{workerId_YYYY-MM-DD}` | site, device time, **server time**, optional location, status, check-out, correction + reason | that worker (own only), owner | worker: create once / check-out once; owner: approve/reject/correct **with audit entry in same batch** |
+| `auditLog/{id}` | who, when, what record, action, note | owner | owner, create only (no edit/delete) |
+| `config/settings` | `askLocation` | any signed-in user | owner |
+| `admins/{uid}` | extra owners/admins | owner | owner |
+| `workerPrivate/{workerId}` | wages (later) | owner only | owner |
+| `reports/{reportId}` | voice report (Phase 3) | that worker, owner | worker: create only; owner: review |
+| `jobs/{jobId}`, `payments/{id}` | customer money (Phase 3) | owner only | owner (payments append-only) |
+
+Anything not listed is closed to everyone.
 
 Voice files: `reports/{workerId}/{reportId}.webm` in Storage. Worker may upload only into their own folder
 (size/type limited); only the owner (and the uploading worker) can play them.
@@ -77,8 +85,9 @@ Voice files: `reports/{workerId}/{reportId}.webm` in Storage. Worker may upload 
   exist. A retry after a bad network becomes a no-op, not a second record.
 - **Server time:** check-in uses Firestore `serverTimestamp()`; rules require it equals the request time.
   The phone's own time is also stored (`deviceTime`) so offline submissions keep their real moment.
-- **Approval:** attendance starts as `received`. Only the owner moves it to `approved`, `rejected` or
-  `corrected` (correction needs a reason). Every change writes an audit entry.
+- **Approval:** attendance starts as `received` (approval is always required). Only the owner moves it to
+  `approved` or `rejected`, or corrects the time (reason required; record becomes approved). The rules refuse
+  any owner change that does not write an audit entry in the same batch.
 - **Payments:** a worker can only *report* "customer says paid / not paid" inside a voice report.
   Only the owner records amounts and marks a payment *verified*. Outstanding = agreed − sum(verified payments),
   calculated, not typed. Separate statuses: work completed → work approved → payment reported → payment
@@ -115,11 +124,15 @@ site-control/
     src/types.ts         record shapes (match §4)
     src/i18n.ts          all Hindi/English text
     src/lib/             India-time formatting, dashboard sums, recorder/online hooks
-    src/demo/            DEMO store + sample data (Phase 1 only; Phase 2 swaps in Firestore
-                         behind the same useStore() data and actions)
+    src/lib/firebase.ts  connection; `npm run dev` always uses the local test database
+    src/firebase-config.ts  real project's web settings (empty until connected)
+    src/auth/            Google sign-in, phone pairing, "no access" screens
+    src/data/            OwnerStore (live owner data + actions), WorkerStore (one phone's own data)
     src/worker/          worker screen
     src/owner/           owner dashboard pages
-  firebase/            security rules, Cloud Functions, emulator config  (Phase 2)
+  package.json         Firebase tools: `npm run emulators`, `npm run test:rules`
+  firebase.json        emulator ports (+ hosting from Phase 4)
+  firebase/            firestore.rules, tests/rules.test.mjs (Cloud Functions in Phase 4)
   android-widget/      Kotlin + Glance owner widget                      (Phase 5)
 ```
 

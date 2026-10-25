@@ -1,33 +1,30 @@
 import { useState } from 'react'
-import { DemoBanner, LangToggle } from '../components/Common'
+import { LangToggle, TestBanner } from '../components/Common'
 import { Icon } from '../components/Icon'
-import { DEMO_WORKER_ID } from '../demo/demoData'
-import { useStore } from '../demo/DemoStore'
+import { useWorkerStore } from '../data/WorkerStore'
 import { useLang } from '../i18n'
 import { fmtTime, mmss } from '../lib/format'
-import { go, useOnline, useRecorder } from '../lib/hooks'
+import { useOnline, useRecorder } from '../lib/hooks'
 import type { Attendance, PaymentClaim, WorkClaim } from '../types'
 import './worker.css'
 
+// Voice reports are switched on in Phase 3 (needs file storage).
+const VOICE_ENABLED = false
+
 export function WorkerHome() {
-  const store = useStore()
+  const store = useWorkerStore()
   const { t, tx, lang } = useLang()
   const online = useOnline()
-  const workerId = DEMO_WORKER_ID // Phase 2: comes from the signed-in worker
-
-  const worker = store.workers.find((w) => w.id === workerId)!
-  const assignment = store.assignments.find((a) => a.workerId === workerId && a.date === store.today)
-  const site = assignment && store.sites.find((s) => s.id === assignment.siteId)
-  const attendance = store.attendance.find((a) => a.workerId === workerId && a.date === store.today)
-  const myReports = store.reports.filter((r) => r.workerId === workerId && r.deviceTime >= Date.parse(`${store.today}T00:00:00+05:30`))
+  const { worker, assignment, site, attendance } = store
+  if (!worker) return null
 
   return (
     <div className="worker">
       <header className="w-header">
-        <div className="w-hello">{t('hello', { name: lang === 'hi' ? worker.nameHi : worker.name })}</div>
+        <div className="w-hello">{t('hello', { name: lang === 'hi' && worker.nameHi ? worker.nameHi : worker.name })}</div>
         <LangToggle />
       </header>
-      <DemoBanner />
+      <TestBanner />
       {!online && (
         <div className="w-offline" role="status">
           <Icon name="cloudOff" /> {t('noNetwork')}
@@ -50,29 +47,53 @@ export function WorkerHome() {
           </section>
         )}
 
-        {assignment && <AttendanceBlock attendance={attendance} onCheckIn={() => store.checkIn(workerId)} onCheckOut={() => store.checkOut(workerId)} />}
+        {/* Attendance already marked today stays visible even if the owner changed the site since. */}
+        {((assignment && site) || attendance) && (
+          <AttendanceBlock
+            attendance={attendance ?? undefined}
+            locating={store.locating}
+            onCheckIn={() => assignment && store.checkIn(worker.id, assignment.siteId, store.settings.askLocation)}
+            onCheckOut={() => attendance && store.checkOut(attendance.id)}
+          />
+        )}
 
-        {assignment && <VoiceBlock workerId={workerId} />}
+        {store.error && (
+          <div className="w-error" role="alert">
+            <Icon name="alert" /> {t('checkInFailed')}
+          </div>
+        )}
 
-        {myReports.length > 0 && <p className="w-count">{t('updatesToday', { n: myReports.length })}</p>}
+        {assignment && site && (VOICE_ENABLED ? (
+          <VoiceBlock onSend={() => {}} />
+        ) : (
+          <div className="w-soon">
+            <Icon name="mic" size={28} /> {t('voiceSoon')}
+          </div>
+        ))}
       </main>
 
       <footer className="w-footer">
-        <button className="link-btn" onClick={() => go('/')}>{t('backToViews')}</button>
+        <small>{t('appName')}</small>
       </footer>
     </div>
   )
 }
 
-function AttendanceBlock({ attendance, onCheckIn, onCheckOut }: { attendance?: Attendance; onCheckIn: () => void; onCheckOut: () => void }) {
+function AttendanceBlock({ attendance, locating, onCheckIn, onCheckOut }: {
+  attendance?: Attendance
+  locating: boolean
+  onCheckIn: () => void
+  onCheckOut: () => void
+}) {
   const { t } = useLang()
   const [confirmOut, setConfirmOut] = useState(false)
 
   if (!attendance) {
     return (
-      <button className="w-big w-big-green" onClick={onCheckIn}>
+      <button className="w-big w-big-green" onClick={onCheckIn} disabled={locating}>
         <span className="w-big-icon"><Icon name="check" size={44} /></span>
         <span className="w-big-text">{t('markAttendance')}</span>
+        {locating && <span className="w-big-sub">{t('gettingLocation')}</span>}
       </button>
     )
   }
@@ -91,7 +112,7 @@ function AttendanceBlock({ attendance, onCheckIn, onCheckOut }: { attendance?: A
         <span className="w-done-tick"><Icon name={attendance.status === 'rejected' ? 'x' : 'check'} size={34} /></span>
         <div>
           <div className="w-done-title">{t('attendanceDone')}</div>
-          <div className="w-done-time">{fmtTime(attendance.deviceTime)}</div>
+          <div className="w-done-time">{fmtTime(attendance.correctedTime ?? attendance.deviceTime)}</div>
         </div>
       </div>
       <div className="w-done-status">
@@ -116,8 +137,14 @@ function AttendanceBlock({ attendance, onCheckIn, onCheckOut }: { attendance?: A
   )
 }
 
-function VoiceBlock({ workerId }: { workerId: string }) {
-  const store = useStore()
+export interface NewReport {
+  durationSec: number
+  audioUrl: string | null
+  workClaim: WorkClaim
+  paymentClaim: PaymentClaim
+}
+
+function VoiceBlock({ onSend }: { onSend: (r: NewReport) => void }) {
   const { t } = useLang()
   const { state, start, stop, reset } = useRecorder()
   const [workClaim, setWorkClaim] = useState<WorkClaim>(null)
@@ -126,8 +153,8 @@ function VoiceBlock({ workerId }: { workerId: string }) {
 
   const send = () => {
     if (state.kind !== 'done') return
-    store.addReport(workerId, { durationSec: Math.round(state.seconds), audioUrl: state.url, workClaim, paymentClaim })
-    reset(true) // the owner's inbox now plays this audio
+    onSend({ durationSec: Math.round(state.seconds), audioUrl: state.url, workClaim, paymentClaim })
+    reset(true) // the sent report keeps using this audio
     setWorkClaim(null)
     setPaymentClaim(null)
     setSent(true)

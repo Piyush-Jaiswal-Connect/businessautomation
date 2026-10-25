@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { LangContext, loadLang, makeT, saveLang, useLang } from '../i18n'
+import { usingEmulators } from '../lib/firebase'
 import type { Lang } from '../types'
 import { Icon } from './Icon'
 
@@ -31,11 +32,13 @@ export function LangToggle() {
   )
 }
 
-export function DemoBanner() {
+/** Shown while the app uses the local test database instead of the real one. */
+export function TestBanner() {
   const { t } = useLang()
+  if (!usingEmulators) return null
   return (
     <div className="demo-banner" role="note">
-      <strong>DEMO</strong> {t('demoBanner')}
+      <strong>TEST</strong> {t('testDb')}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../demo/DemoStore'
+import { useStore } from '../data/OwnerStore'
 import { useLang } from '../i18n'
 import { fmtDate, fmtDay, rupees } from '../lib/format'
 import { balanceOf, lastPayment, paidFor, payState, totalOutstanding } from '../lib/summary'
@@ -14,6 +14,7 @@ export function PaymentsPage() {
 
   return (
     <>
+      <p className="o-notice">{t('phase3Notice')}</p>
       <div className="o-total">
         <span>{t('totalOutstanding')}</span>
         <strong>{rupees(totalOutstanding(store.jobs, store.payments))}</strong>

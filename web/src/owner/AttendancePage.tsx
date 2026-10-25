@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useStore } from '../demo/DemoStore'
+import { useStore } from '../data/OwnerStore'
 import { useLang } from '../i18n'
 import { at, fmtTime, hhmm } from '../lib/format'
 import { awaitsApproval } from '../lib/summary'
@@ -23,12 +23,13 @@ export function AttendancePage() {
   const [filter, setFilter] = useState<Filter>('all')
 
   const todays = store.attendance.filter((a) => a.date === store.today)
+  const attendanceSite = (workerId: string) => todays.find((a) => a.workerId === workerId)?.siteId
   const rows = store.workers
     .filter((w) => w.active)
     .map((w) => ({
       worker: w,
       attendance: todays.find((a) => a.workerId === w.id),
-      siteId: store.assignments.find((a) => a.workerId === w.id && a.date === store.today)?.siteId,
+      siteId: attendanceSite(w.id) ?? store.assignments.find((a) => a.workerId === w.id)?.siteId,
     }))
     // waiting for you first, then present, then absent
     .sort((a, b) => rank(a.attendance) - rank(b.attendance) || (a.attendance?.deviceTime ?? 0) - (b.attendance?.deviceTime ?? 0))
@@ -50,6 +51,7 @@ export function AttendancePage() {
           {t('approveAllReceived', { n: receivedIds.length })}
         </button>
       )}
+      {rows.length === 0 && filter === 'all' && <p className="o-muted">{t('noWorkersYet')}</p>}
       <ul className="o-stack">
         {rows.map(({ worker, attendance, siteId }) => (
           <li key={worker.id} className="o-item">
@@ -89,6 +91,11 @@ function AttendanceDetail({ a }: { a: Attendance }) {
         <span>{t('checkInAt', { time: fmtTime(shownTime) })}</span>
         {a.checkOutTime && <span>{t('checkOutAt', { time: fmtTime(a.checkOutTime) })}</span>}
         {a.correctedTime && <span className="o-amber">{t('correctedNote', { time: fmtTime(a.deviceTime) })}</span>}
+        {a.location && (
+          <a className="o-link" href={`https://maps.google.com/?q=${a.location.lat},${a.location.lng}`} target="_blank" rel="noreferrer">
+            {t('location')} ±{a.location.accuracy} m — {t('openMap')}
+          </a>
+        )}
       </div>
 
       {editing ? (

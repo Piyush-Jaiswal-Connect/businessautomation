@@ -25,6 +25,8 @@ export interface Worker {
   nameHi: string
   trade: Trade
   active: boolean
+  deviceUid: string | null // the paired phone; null = no phone or deactivated
+  pairedAt: number | null
 }
 
 export interface Site {
@@ -34,13 +36,16 @@ export interface Site {
   active: boolean
 }
 
-/** Today's site and job for one worker. Contains no money. */
+/** A worker's current site and work. Stays until the owner changes it. Contains no money. */
 export interface Assignment {
   workerId: string
   siteId: string
-  jobId: string
-  date: string // YYYY-MM-DD, Asia/Kolkata
+  jobId?: string // Phase 3
   task: Text
+}
+
+export interface Settings {
+  askLocation: boolean
 }
 
 /** OFFLINE/PENDING SYNC → SUBMITTED → RECEIVED → APPROVED / REJECTED */
@@ -51,7 +56,13 @@ export interface AuditEntry {
   at: number
   by: 'worker' | 'owner'
   action: string
-  note?: string
+  note?: string | null
+}
+
+export interface GeoPoint {
+  lat: number
+  lng: number
+  accuracy: number
 }
 
 export interface Attendance {
@@ -60,10 +71,12 @@ export interface Attendance {
   siteId: string
   date: string
   deviceTime: number // when the worker tapped, phone clock
-  serverTime: number | null // when the server received it
+  serverTime: number | null // when the server received it (null until it has)
   checkOutTime: number | null
   status: AttendanceStatus
   correctedTime: number | null
+  correctionReason: string | null
+  location: GeoPoint | null
   history: AuditEntry[]
 }
 

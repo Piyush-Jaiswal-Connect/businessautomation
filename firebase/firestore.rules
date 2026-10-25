@@ -1,0 +1,242 @@
+rules_version = '2';
+
+// Site Control security rules.
+// Everything is denied unless a rule below allows it.
+// Roles:
+//   owner  — Google account whose verified email is in ownerEmails(), or has an admins/{uid} document.
+//   worker — a phone paired by the owner: devices/{uid} points to the worker, and that worker's
+//            deviceUid is this phone and the worker is active. Deactivating clears deviceUid,
+//            which cuts the phone off at once.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    // Owner Google accounts. To add another owner, add the email here and redeploy the rules.
+    function ownerEmails() {
+      return ['munnajaswal22@gmail.com'];
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return signedIn() && (
+        (request.auth.token.email_verified == true && request.auth.token.email in ownerEmails())
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function assignedSite(workerId) {
+      return get(/databases/$(database)/documents/assignments/$(workerId)).data.siteId;
+    }
+
+    function isWorker(workerId) {
+      let w = get(/databases/$(database)/documents/workers/$(workerId)).data;
+      return signedIn() && w.active == true && w.deviceUid == request.auth.uid;
+    }
+
+    // The worker this phone is paired with (only meaningful together with isWorker()).
+    function myWorkerId() {
+      return get(/databases/$(database)/documents/devices/$(request.auth.uid)).data.workerId;
+    }
+
+    function pad2(n) {
+      return n < 10 ? '0' + string(n) : string(n);
+    }
+
+    // YYYY-MM-DD in India time (UTC+5:30).
+    function istDate(t) {
+      let x = t + duration.value(330, 'm');
+      return string(x.year()) + '-' + pad2(x.month()) + '-' + pad2(x.day());
+    }
+
+    function text(t) {
+      return t is map && t.keys().hasOnly(['en', 'hi']) && t.en is string && t.en.size() > 0
+        && t.en.size() <= 120 && t.hi is string && t.hi.size() <= 120;
+    }
+
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ---------- owner-managed records ----------
+
+    match /admins/{uid} {
+      allow read, write: if isOwner();
+    }
+
+    match /config/settings {
+      allow read: if signedIn();
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly(['askLocation'])
+        && request.resource.data.askLocation is bool;
+    }
+
+    match /sites/{siteId} {
+      allow read: if isOwner()
+        || (signedIn() && isWorker(myWorkerId())
+            && assignedSite(myWorkerId()) == siteId);
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(['name', 'area', 'active', 'createdAt'])
+        && text(request.resource.data.name) && text(request.resource.data.area)
+        && request.resource.data.active is bool;
+      allow delete: if false; // switch off instead, so old attendance keeps its site
+    }
+
+    match /workers/{workerId} {
+      allow get: if isOwner() || isWorker(workerId);
+      allow list: if isOwner();
+      allow create: if isOwner() && validWorker() && request.resource.data.deviceUid == null;
+      allow update: if (isOwner() && validWorker()) || claimByPhone(workerId);
+      allow delete: if false; // deactivate instead, so history stays
+    }
+
+    function validWorker() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'nameHi', 'trade', 'active', 'deviceUid', 'pairedAt', 'pairingCode', 'createdAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.nameHi is string && d.nameHi.size() <= 60
+        && d.trade in ['mason', 'painter', 'tiler', 'carpenter', 'plumber', 'electrician', 'waterproofing', 'helper']
+        && d.active is bool;
+    }
+
+    // A phone links itself to a worker with a fresh, unused pairing code made by the owner.
+    // The same batch must also mark the code used (see /pairings) and create /devices/{uid}.
+    function claimByPhone(workerId) {
+      let d = request.resource.data;
+      let code = d.pairingCode;
+      let p = get(/databases/$(database)/documents/pairings/$(code)).data;
+      return signedIn()
+        && changed().hasOnly(['deviceUid', 'pairedAt', 'pairingCode'])
+        && d.deviceUid == request.auth.uid
+        && d.pairedAt == request.time
+        && resource.data.active == true
+        && p.workerId == workerId
+        && p.usedBy == null
+        && p.expiresAt > request.time
+        && getAfter(/databases/$(database)/documents/pairings/$(code)).data.usedBy == request.auth.uid;
+    }
+
+    match /pairings/{code} {
+      // A phone may look up a code only while it is fresh and unused.
+      allow get: if isOwner()
+        || (signedIn() && resource.data.usedBy == null && resource.data.expiresAt > request.time);
+      allow list, delete: if isOwner();
+      allow create: if isOwner()
+        && code.matches('^[0-9]{10}$')
+        && request.resource.data.keys().hasOnly(['workerId', 'createdBy', 'createdAt', 'expiresAt', 'usedBy', 'usedAt'])
+        && exists(/databases/$(database)/documents/workers/$(request.resource.data.workerId))
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(30, 'm')
+        && request.resource.data.usedBy == null
+        && request.resource.data.usedAt == null;
+      allow update: if signedIn()
+        && resource.data.usedBy == null
+        && resource.data.expiresAt > request.time
+        && changed().hasOnly(['usedBy', 'usedAt'])
+        && request.resource.data.usedBy == request.auth.uid
+        && request.resource.data.usedAt == request.time
+        && getAfter(/databases/$(database)/documents/workers/$(resource.data.workerId)).data.deviceUid == request.auth.uid;
+    }
+
+    match /devices/{uid} {
+      allow get: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow list, delete: if isOwner();
+      // Written in the pairing batch; a phone may be paired again later with a new code.
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['workerId', 'pairedAt'])
+        && request.resource.data.pairedAt == request.time
+        && getAfter(/databases/$(database)/documents/workers/$(request.resource.data.workerId)).data.deviceUid == uid;
+    }
+
+    // Standing site + task for each worker (no money in here).
+    match /assignments/{workerId} {
+      allow get: if isOwner() || isWorker(workerId);
+      allow list: if isOwner();
+      allow create, update: if isOwner()
+        && request.resource.data.keys().hasOnly(['siteId', 'task', 'updatedAt'])
+        && exists(/databases/$(database)/documents/sites/$(request.resource.data.siteId))
+        && text(request.resource.data.task)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isOwner();
+    }
+
+    // ---------- attendance ----------
+
+    // ID is workerId_YYYY-MM-DD, so one worker has at most one record per day.
+    match /attendance/{id} {
+      allow get: if isOwner() || isWorker(id.split('_')[0]);
+      allow list: if isOwner();
+
+      allow create: if checkIn(id);
+      allow update: if checkOut() || ownerDecision(id);
+      allow delete: if false;
+    }
+
+    function checkIn(id) {
+      let d = request.resource.data;
+      return isWorker(d.workerId)
+        && id == d.workerId + '_' + d.date
+        && d.keys().hasOnly(['workerId', 'siteId', 'date', 'deviceTime', 'serverTime', 'location',
+                             'status', 'checkOutTime', 'checkOutDeviceTime', 'correctedTime',
+                             'correctionReason', 'decidedBy', 'decidedAt', 'lastAuditId'])
+        && d.siteId == assignedSite(d.workerId)
+        && d.serverTime == request.time
+        && d.deviceTime is timestamp
+        && d.deviceTime <= request.time + duration.value(5, 'm')
+        && d.deviceTime > request.time - duration.value(48, 'h')
+        && d.date == istDate(d.deviceTime)
+        && d.status == 'received'
+        && d.checkOutTime == null && d.checkOutDeviceTime == null
+        && d.correctedTime == null && d.correctionReason == null
+        && d.decidedBy == null && d.decidedAt == null && d.lastAuditId == null
+        && (d.location == null || validLocation(d.location));
+    }
+
+    function validLocation(l) {
+      return l is map && l.keys().hasOnly(['lat', 'lng', 'accuracy'])
+        && l.lat is number && l.lng is number && l.accuracy is number;
+    }
+
+    function checkOut() {
+      return isWorker(resource.data.workerId)
+        && changed().hasOnly(['checkOutTime', 'checkOutDeviceTime'])
+        && resource.data.checkOutTime == null
+        && resource.data.status != 'rejected'
+        && request.resource.data.checkOutTime == request.time
+        && request.resource.data.checkOutDeviceTime is timestamp;
+    }
+
+    // Approve / reject / correct. The same batch must write an audit entry about this record.
+    function ownerDecision(id) {
+      let d = request.resource.data;
+      let audit = getAfter(/databases/$(database)/documents/auditLog/$(d.lastAuditId));
+      return isOwner()
+        && changed().hasOnly(['status', 'correctedTime', 'correctionReason', 'decidedBy', 'decidedAt', 'lastAuditId'])
+        && d.status in ['approved', 'rejected']
+        && d.decidedBy == request.auth.uid
+        && d.decidedAt == request.time
+        && d.lastAuditId != resource.data.lastAuditId
+        && audit.data.target == 'attendance/' + id
+        && audit.data.at == request.time
+        && (!('correctedTime' in changed())
+            || (d.correctedTime is timestamp && d.correctionReason is string && d.correctionReason.size() >= 3));
+    }
+
+    // ---------- audit trail ----------
+
+    match /auditLog/{entryId} {
+      allow read: if isOwner();
+      allow create: if isOwner()
+        && request.resource.data.keys().hasOnly(['at', 'by', 'byEmail', 'target', 'action', 'note', 'before', 'after'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.target is string
+        && request.resource.data.action is string;
+      allow update, delete: if false;
+    }
+  }
+}

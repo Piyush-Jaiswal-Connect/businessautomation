@@ -1,11 +1,12 @@
-import { DemoBanner, LangToggle } from '../components/Common'
+import { LangToggle, TestBanner } from '../components/Common'
 import { Icon, type IconName } from '../components/Icon'
-import { useStore } from '../demo/DemoStore'
+import { useStore } from '../data/OwnerStore'
 import { useLang, type TKey } from '../i18n'
-import { at, fmtLongDate, fmtTime, rupees } from '../lib/format'
+import { at, fmtLongDate, fmtTime } from '../lib/format'
 import { go } from '../lib/hooks'
-import { awaitsApproval, balanceOf, followUpsDue, isPresent, totalOutstanding, unreviewed } from '../lib/summary'
+import { awaitsApproval, isPresent } from '../lib/summary'
 import { AttendancePage } from './AttendancePage'
+import { ManagePage } from './ManagePage'
 import { PaymentsPage } from './PaymentsPage'
 import { ReportsPage } from './ReportsPage'
 import { SitesPage } from './SitesPage'
@@ -23,10 +24,9 @@ const tabs: [string, TKey, IconName][] = [
 export function OwnerApp({ tab }: { tab: string }) {
   const store = useStore()
   const { t } = useLang()
-  const current = tabs.some(([id]) => id === tab) ? tab : 'home'
+  const current = tab === 'manage' || tabs.some(([id]) => id === tab) ? tab : 'home'
   const badges: Record<string, number> = {
     attendance: store.attendance.filter((a) => a.date === store.today && awaitsApproval(a)).length,
-    reports: unreviewed(store.reports).length,
   }
 
   return (
@@ -38,17 +38,30 @@ export function OwnerApp({ tab }: { tab: string }) {
           <small>{fmtLongDate(at(store.today, '12:00'))}</small>
         </div>
         <LangToggle />
+        <button className={`o-icon-btn ${current === 'manage' ? 'on' : ''}`} onClick={() => go('/owner/manage')} aria-label={t('manage')} title={t('manage')}>
+          <Icon name="users" />
+        </button>
       </header>
-      <DemoBanner />
-      <main className="o-main">
-        {current === 'home' && <OwnerHome />}
-        {current === 'attendance' && <AttendancePage />}
-        {current === 'sites' && <SitesPage />}
-        {current === 'reports' && <ReportsPage />}
-        {current === 'payments' && <PaymentsPage />}
-        <div className="o-footer">
-          <button className="link-btn" onClick={() => go('/')}>{t('backToViews')}</button>
+      <TestBanner />
+      {store.error && (
+        <div className="o-error" role="alert">
+          {t('actionFailed', { msg: store.error })}
+          <button onClick={store.clearError} aria-label={t('close')}><Icon name="x" size={18} /></button>
         </div>
+      )}
+      <main className="o-main">
+        {!store.loaded ? (
+          <p className="o-muted">{t('loading')}</p>
+        ) : (
+          <>
+            {current === 'home' && <OwnerHome />}
+            {current === 'attendance' && <AttendancePage />}
+            {current === 'sites' && <SitesPage />}
+            {current === 'reports' && <ReportsPage />}
+            {current === 'payments' && <PaymentsPage />}
+            {current === 'manage' && <ManagePage />}
+          </>
+        )}
       </main>
       <nav className="o-nav">
         {tabs.map(([id, label, icon]) => (
@@ -74,30 +87,25 @@ function OwnerHome() {
   const activeWorkers = store.workers.filter((w) => w.active)
   const present = todays.filter(isPresent).length
   const awaiting = todays.filter(awaitsApproval).length
-  const pendingSync = todays.filter((a) => a.status === 'pending_sync').length
   const activeSites = store.sites.filter((s) => s.active).length
-  const reportsPending = unreviewed(store.reports).length
-  const outstanding = totalOutstanding(store.jobs, store.payments)
-  const owingJobs = store.jobs.filter((j) => balanceOf(j, store.payments) > 0).length
-  const completedToApprove = store.jobs.filter((j) => j.workStatus === 'worker_completed').length
-  const followUps = followUpsDue(store.jobs, store.payments, store.today).length
+  const paired = activeWorkers.filter((w) => w.deviceUid).length
+  const unpaired = activeWorkers.length - paired
+  const noSite = activeWorkers.filter((w) => !store.assignments.some((a) => a.workerId === w.id)).length
 
-  const attention: [number, string, string][] = (
+  const attention = (
     [
       [awaiting, t('attnApprove', { n: awaiting }), '/owner/attendance'],
-      [reportsPending, t('attnReports', { n: reportsPending }), '/owner/reports'],
-      [completedToApprove, t('attnCompleted', { n: completedToApprove }), '/owner/reports'],
-      [followUps, t('attnFollowUp', { n: followUps }), '/owner/payments'],
-      [pendingSync, t('attnPendingSync', { n: pendingSync }), '/owner/attendance'],
+      [unpaired, t('attnUnpaired', { n: unpaired }), '/owner/manage'],
+      [noSite, t('attnNoSite', { n: noSite }), '/owner/manage'],
     ] as [number, string, string][]
   ).filter(([n]) => n > 0)
 
-  const activity = [
-    ...todays.map((a) => ({ at: a.deviceTime, text: t('actCheckIn', { name: workerName(a.workerId), site: siteName(a.siteId) }), icon: 'check' as const })),
-    ...store.reports.map((r) => ({ at: r.deviceTime, text: t('actReport', { name: workerName(r.workerId), site: siteName(r.siteId) }), icon: 'mic' as const })),
-  ]
+  const activity = todays
+    .flatMap((a) => [
+      { at: a.deviceTime, text: t('actCheckIn', { name: workerName(a.workerId), site: siteName(a.siteId) }), icon: 'check' as const },
+    ])
     .sort((a, b) => b.at - a.at)
-    .slice(0, 6)
+    .slice(0, 8)
 
   return (
     <>
@@ -114,15 +122,17 @@ function OwnerHome() {
           <span className="o-card-value">{activeSites}</span>
           <span className="o-card-sub">&nbsp;</span>
         </button>
-        <button className={`o-card ${reportsPending ? 'o-card-alert' : ''}`} onClick={() => go('/owner/reports')}>
-          <span className="o-card-label">{t('reportsPending')}</span>
-          <span className="o-card-value">{reportsPending}</span>
+        <button className={`o-card ${awaiting ? 'o-card-alert' : ''}`} onClick={() => go('/owner/attendance')}>
+          <span className="o-card-label">{t('toApprove')}</span>
+          <span className="o-card-value">{awaiting}</span>
           <span className="o-card-sub">&nbsp;</span>
         </button>
-        <button className="o-card" onClick={() => go('/owner/payments')}>
-          <span className="o-card-label">{t('outstanding')}</span>
-          <span className="o-card-value o-money">{rupees(outstanding)}</span>
-          <span className="o-card-sub">{t('nJobs', { n: owingJobs })}</span>
+        <button className="o-card" onClick={() => go('/owner/manage')}>
+          <span className="o-card-label">{t('phonesPaired')}</span>
+          <span className="o-card-value">
+            {paired}<small>/{activeWorkers.length}</small>
+          </span>
+          <span className="o-card-sub">&nbsp;</span>
         </button>
       </section>
 
@@ -147,15 +157,19 @@ function OwnerHome() {
 
       <section className="o-panel">
         <h2>{t('recentActivity')}</h2>
-        <ul className="o-feed">
-          {activity.map((a) => (
-            <li key={`${a.icon}${a.at}${a.text}`}>
-              <Icon name={a.icon} size={18} />
-              <span>{a.text}</span>
-              <time>{fmtTime(a.at)}</time>
-            </li>
-          ))}
-        </ul>
+        {activity.length === 0 ? (
+          <p className="o-muted">{t('noActivity')}</p>
+        ) : (
+          <ul className="o-feed">
+            {activity.map((a) => (
+              <li key={`${a.icon}${a.at}${a.text}`}>
+                <Icon name={a.icon} size={18} />
+                <span>{a.text}</span>
+                <time>{fmtTime(a.at)}</time>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </>
   )

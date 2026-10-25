@@ -1,4 +1,4 @@
-import { useStore } from '../demo/DemoStore'
+import { useStore } from '../data/OwnerStore'
 import { tradeNames, useLang } from '../i18n'
 
 export function useNames() {

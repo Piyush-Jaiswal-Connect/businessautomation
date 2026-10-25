@@ -1,4 +1,4 @@
-import { useStore } from '../demo/DemoStore'
+import { useStore } from '../data/OwnerStore'
 import { useLang } from '../i18n'
 import { fmtTime, rupees } from '../lib/format'
 import { awaitsApproval, balanceOf, isPresent } from '../lib/summary'
@@ -16,12 +16,14 @@ export function SitesPage() {
   const { t, tx } = useLang()
   const { workerName } = useNames()
 
+  if (!store.sites.some((s) => s.active)) return <p className="o-muted">{t('noSitesYet')}</p>
+
   return (
     <ul className="o-stack">
       {store.sites
         .filter((s) => s.active)
         .map((site) => {
-          const assigned = store.assignments.filter((a) => a.siteId === site.id && a.date === store.today)
+          const assigned = store.assignments.filter((a) => a.siteId === site.id && store.workers.some((w) => w.id === a.workerId && w.active))
           const job = store.jobs.find((j) => j.siteId === site.id)
           const att = store.attendance.filter((a) => a.siteId === site.id && a.date === store.today)
           const reports = store.reports.filter((r) => r.siteId === site.id)

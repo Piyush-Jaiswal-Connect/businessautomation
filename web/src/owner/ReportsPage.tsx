@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Icon } from '../components/Icon'
-import { useStore } from '../demo/DemoStore'
+import { useStore } from '../data/OwnerStore'
 import { useLang } from '../i18n'
 import { fmtTime, mmss } from '../lib/format'
 import { Chip, useNames } from './shared'
@@ -17,6 +17,7 @@ export function ReportsPage() {
 
   return (
     <>
+      <p className="o-notice">{t('phase3Notice')}</p>
       <label className="o-check">
         <input type="checkbox" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
         {t('showReviewed')}
