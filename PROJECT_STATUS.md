@@ -2,8 +2,8 @@
 
 ## CURRENT PHASE:
 **Phase 3 — Voice reports with AI + customer payments: BUILT and TESTED on the local test database with the REAL free
-Gemini AI (checkpoint P3).** Security rules are not yet uploaded to the real project (waiting for the owner's one-time
-`firebase login`). Waiting for owner approval to start Phase 4 (online app, phones, notifications).
+Gemini AI (checkpoint P3).** Real project is set up: Firestore database in **Mumbai (asia-south1)**, security rules and
+index uploaded (2026-10-25). Waiting for owner approval to start Phase 4 (online app, phones, notifications).
 
 ## COMPLETED:
 - P0 setup · P1 screens · P2 login, phone pairing, attendance, approvals (see git history and ARCHITECTURE.md).
@@ -66,7 +66,8 @@ Phase 3 (P3):
 ## TESTS NOT RUN:
 - **Real microphone and real phones** (test browser blocks the mic; test messages were computer-generated Hindi
   voices, clearer than a real site with noise). Real-world accuracy must be checked with your workers.
-- Real Firebase project: rules/index not uploaded yet (needs `firebase login`); nobody has signed in there yet.
+- Real project: nobody has signed in yet. Owner Google sign-in should be tested on the hosted app (Phase 4): on
+  localhost, Chrome may block the sign-in redirect because the login page is on a different domain.
 - Offline sending on a real phone (uses Firestore's offline queue; not switchable in the test browser).
 - Two owner devices processing at the same time (guarded by a claim step; not tested).
 - 90-day recording clean-up (runs when the owner app opens; not exercised).
@@ -87,15 +88,19 @@ Phase 3 (P3):
 - Now: **₹0** (Spark plan; Gemini free tier; recordings in Firestore, ~0.1–0.5 MB each, deleted after 90 days).
 - Phase 4: Blaze plan (card) for push notifications; expected ₹0; set a budget alert then.
 
+## REAL PROJECT SET-UP (2026-10-25):
+- `firebase login` done (munnajaswal22@gmail.com). Rules + index deployed with `npm run deploy:db`.
+- Incident: the first rules deploy found no database and auto-created one in **nam5 (USA)**. It was empty; the owner deleted
+  it, and it was recreated in **asia-south1** (Google blocks reusing a deleted name for ~5 minutes). `firebase.json` now pins
+  `"location": "asia-south1"` so a deploy can never choose a location again.
+- Verified from outside: reading workers/sites/jobs/payments/recordings and writing without sign-in → PERMISSION_DENIED.
+
 ## MANUAL ACTION REQUIRED (owner):
-1. In the **Firebase login** terminal tab: answer the question with **n**, press Enter, then click **Allow** in the browser
-   (Google account that owns the Firebase project). Then tell me "login done" — I upload the rules + index with
-   `npm run deploy:db`.
-2. Try it on this PC: double-click `START_DEMO.cmd` (test database + real AI) and speak a real message as a worker.
-3. Phase 4 needs: an Android phone for each side to test, and later the Blaze plan for notifications.
+1. Try it on this PC: double-click `START_DEMO.cmd` (test database + real AI) and speak a real message as a worker.
+2. Phase 4 needs: an Android phone for each side to test, and later the Blaze plan for notifications.
 
 ## NEXT EXACT ACTION:
-1. After login: `npm run deploy:db` (rules + index to `prod`), then owner signs in on the real project.
-2. Phase 4 (on approval): Firebase Hosting (https), install on phones, real phone tests (mic, offline, two phones),
+1. Phase 4 (on approval): Firebase Hosting (https), install on phones, real phone tests (mic, offline, two phones),
    owner push notifications (Blaze + Cloud Function), and move AI processing to a server function if Blaze is
-   enabled (so text appears even when the owner app is closed).
+   enabled (so text appears even when the owner app is closed). Set `authDomain` to the hosting domain so Google
+   sign-in works inside the installed app; first owner sign-in on the real project.

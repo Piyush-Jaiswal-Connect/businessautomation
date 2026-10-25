@@ -48,6 +48,5 @@ Expected cost: **₹0** for now. The voice-to-text uses Google's free AI tier (g
 what you need). Later, only phone notifications (Phase 4) need a card on file with Google; expected cost still ₹0.
 
 ## What you need to do now
-1. In the **Firebase login** terminal tab: type **n**, press Enter, then click **Allow** in the browser. Tell me "login done".
-2. Try the voice message yourself on this PC (steps above) and tell me what to change.
-3. When ready, tell me: **"Start Phase 4"** (app online, installed on phones, notifications).
+1. Try the voice message yourself on this PC (steps above) and tell me what to change.
+2. When ready, tell me: **"Start Phase 4"** (app online, installed on phones, notifications).
